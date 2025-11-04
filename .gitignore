@@ -1,3 +1,6 @@
+# -----------------------------------------------
+# 1. xv6 官方的原始规则 (你发给我的)
+# -----------------------------------------------
 *~
 _*
 *.o
@@ -12,10 +15,35 @@ initcode
 initcode.out
 kernelmemfs
 kernel/kernel
-user/usys.S
+# user/usys.S  <-- 我们把它移到下面
 .gdbinit
 myapi.key
 *-handin.tar.gz
 xv6.out*
 .vagrant/
 submissions/
+grade-lab-* # 这是我补充的，原始文件里可能没有
+fs.img       # 也是补充的
+
+# -----------------------------------------------
+# 2. 我们为你“混在一起的”环境补充的规则
+# -----------------------------------------------
+
+# 忽略“个人配置文件”
+.cache/
+.config/
+.gnupg/
+.local/
+.ssh/
+.vscode-server/
+.dir-locals.el
+.gitconfig
+.profile
+
+# 忽略 user/ 目录下的所有“编译程序”
+# (但 *不* 忽略 .c, .h, 和 usys.S)
+user/*
+!user/*.c
+!user/*.h
+!user/usys.S
+
