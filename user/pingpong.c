@@ -9,14 +9,19 @@ int main(){
   char buf[5];
   int pid=fork();
   if(pid==0){ // 子进程，从p1[0]读，向p2[1]写
+    close(p1[1]);
+    close(p2[0]);
     read(p1[0],buf,1);
-    printf("%d:received ping\n",getpid());
+    printf("%d: received ping\n",getpid());
     write(p2[1],buf,1);
   }
   else{ // 父进程，从p2[0]读，向p1[1]写
+    close(p2[1]);
+    close(p1[0]);
     write(p1[1],"a",1);
     read(p2[0],buf,1);
-    printf("%d:received pong\n",getpid());
+    printf("%d: received pong\n",getpid());
+    wait(0);
   }
   exit(0);
 }
