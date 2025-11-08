@@ -1,47 +1,45 @@
 #include "kernel/types.h"
 #include "user/user.h"
-#include <math.h>
-
-int is_prime(int n){
-  for(int i=2;i<=sqrt(n);i++){
-    if(n%i==0){
-      return 0;
-    }
-  }
-  return 1;
-}
 
 void func(int pread){
-  // 这是当前主进程连接右侧子进程的管子，pread是从左侧管子读的文件描述符
-  int p[2];
-  pipe(p);
-  int pid=fork();
-  if(pid==0){
-    close(p[1]); // 子进程需要关闭p[1]，然后从p[0]读取
-    func(p[0]);
-  }
-  else{ // 主进程从左侧管道读取内容，然后从右侧管道向子进程写出内容
-    close(p[0]); // 主进程需要关闭p[0]
-    int received_num=1;
-    int shaizi=0;
-    int total=0;
-    while(read(pread,&received_num,sizeof(int))!=0){
-      total++;
-      if(shaizi==0){
-        shaizi=received_num;
-        printf("prime %d\n",received_num);
-        continue;
-      }
-      if(received_num%shaizi!=0){
-        write(p[1],&received_num,sizeof(int));
-      }
+  int received_num,shaizi;
+  int yes=0;
+  if(read(pread,&shaizi,sizeof(int))==0) exit(0);
+  printf("prime %d\n",shaizi);
+  while(read(pread,&received_num,sizeof(int))!=0){
+    if(received_num%shaizi!=0){ // 则读到第一个需要传输给下一个进程的数，需要创建下一个进程
+      yes=1;
+      break;
     }
-    // 循环结束后，主进程已经从左边读取了所有数据，并向右边发送了所有数据
-    close(pread);
-    close(p[1]);
-    wait((int*)0);
-    exit(0);
+    // printf("%d被丢弃\n",received_num);
   }
+  
+  if(yes){
+    int p[2];
+    pipe(p);
+    // 应该在创建新分支之前pipe
+    int pid=fork();
+    if(pid==0){
+      close(p[1]);
+      func(p[0]);
+      exit(0);
+    }
+    else{
+      close(p[0]);
+      write(p[1],&received_num,sizeof(int));
+      while(read(pread,&received_num,sizeof(int))!=0){
+        if(received_num%shaizi!=0){
+          // printf("%d被发送给下一个进程\n",received_num);
+          write(p[1],&received_num,sizeof(int));
+        }
+      }
+      close(pread);
+      close(p[1]);
+      wait((int*)0);
+      exit(0);
+    }
+  }
+  exit(0);
 }
 
 int main(){
@@ -58,8 +56,9 @@ int main(){
       write(p[1],&i,sizeof(int));
     }
     close(p[1]);
+    wait(0);
   }
-  return 0;
+  exit(0);
 }
 
 // 这是一个很巧妙的并发的素数筛，不同于每个数分别进行一次素数判别
