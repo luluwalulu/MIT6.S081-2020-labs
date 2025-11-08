@@ -11,7 +11,6 @@ void func(int pread){
       yes=1;
       break;
     }
-    // printf("%d被丢弃\n",received_num);
   }
   
   if(yes){
@@ -29,17 +28,14 @@ void func(int pread){
       write(p[1],&received_num,sizeof(int));
       while(read(pread,&received_num,sizeof(int))!=0){
         if(received_num%shaizi!=0){
-          // printf("%d被发送给下一个进程\n",received_num);
           write(p[1],&received_num,sizeof(int));
         }
       }
       close(pread);
       close(p[1]);
       wait((int*)0);
-      exit(0);
     }
   }
-  exit(0);
 }
 
 int main(){
