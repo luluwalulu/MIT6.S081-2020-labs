@@ -126,6 +126,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->mask=0;
 
   return p;
 }
@@ -263,6 +264,8 @@ fork(void)
   struct proc *p = myproc();
 
   // Allocate process.
+
+
   if((np = allocproc()) == 0){
     return -1;
   }
@@ -294,6 +297,9 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  // 添加修改
+  np->mask=p->mask;
 
   release(&np->lock);
 
