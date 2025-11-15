@@ -699,3 +699,14 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64 unusedprocs(){
+  struct proc* p;
+  uint64 sum=0;
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p->state != UNUSED) {
+      sum++;
+    }
+  }
+  return sum;
+}

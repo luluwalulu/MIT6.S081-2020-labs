@@ -6,6 +6,8 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
+
 
 uint64
 sys_exit(void)
@@ -110,3 +112,24 @@ uint64 sys_trace(void){
 
   return 0;
 } 
+
+uint64 sys_sysinfo(void){
+  // sysinfo需要把传递给它的sysinfo指针填充好对应的信息
+  // 由于sysinfo函数传递的是一个用户态指针，所以我们不能直接写sysinfo->freemem=。（内核不能直接使用用户态指针，因为内核不信任用户）
+  // 使用copyout：copyout(p->pagetable, user_addr, kernel_addr, size);
+  // p->pagetable是整个进程的页表，user_addr是传递的用户态指针，kernel_addr是我要复制的信息，size则是字节数
+  // copyout通过参照p->pagetable来将内核态的信息送到用户态那里
+  
+  uint64 p;
+  if(argaddr(0, &p) < 0)
+    return -1;
+
+  // 进行填充
+  struct sysinfo info;
+  info.freemem=rest();
+  info.nproc=unusedprocs();
+  if(copyout(myproc()->pagetable,p,(char*)&info,sizeof(struct sysinfo))<0){
+    return -1;
+  }
+  return 0;
+}
