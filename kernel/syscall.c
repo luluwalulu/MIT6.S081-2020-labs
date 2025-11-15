@@ -166,9 +166,9 @@ syscall(void)
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) { // 如果能够正常调用syscalls[num]
     p->trapframe->a0 = syscalls[num](); // 就把syscalls[num]()调用的结果存在p->trapframe->a0中，这样一旦从内核返回，就可以从a0那里进行读取
     if(myproc()->mask!=0){
-      // 如果是trace自己，不需要打印
-      if(num==22) return;
-      printf("%d: syscall %s -> %d\n",num,syscallNames[num],p->trapframe->a0);
+      // 如果num对应的掩码中的位置位才需要打印
+      if(( (1<<(num))&(myproc()->mask) )!=0)
+      printf("%d: syscall %s -> %d\n",myproc()->pid,syscallNames[num],p->trapframe->a0);
     }
   } else {
     printf("%d %s: unknown sys call %d\n",
