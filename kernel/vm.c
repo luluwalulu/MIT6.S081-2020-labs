@@ -21,8 +21,13 @@ extern char trampoline[]; // trampoline.S
 void
 kvminit()
 {
+  // 为最高一级page directory分配物理page
   kernel_pagetable = (pagetable_t) kalloc();
+  // 将这段内存初始化为0
   memset(kernel_pagetable, 0, PGSIZE);
+
+  // etext是一个链接器符号，当你编译内核时，链接器(kernel.ld)会把所有机器指令拼在一起，最后在指令结束的地方打个标记即为etext
+  // (uint64)etext-KERNBASE刚好就是内核代码的总长度
 
   // uart registers
   kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
@@ -52,7 +57,10 @@ kvminit()
 void
 kvminithart()
 {
+  // 设置SATP寄存器，下一条指令被执行时，地址翻译就会开始生效，而在这条指令之前，我们是直接使用物理地址
   w_satp(MAKE_SATP(kernel_pagetable));
+  // 一旦加载page table到SATP寄存器上，我们的世界观就会完全改变。如果page table设置错误，将会有各种奇怪的bug和错误发生
+
   sfence_vma();
 }
 
@@ -68,6 +76,9 @@ kvminithart()
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
+// walk是内核在软件层面模拟硬件MMU的函数
+// 他从根页表开始一级一级往下找，如果路径通畅，它返回虚拟地址对应的最低级PTE的指针
+// 如果中间某一级页表不存在，且参数 alloc 被设置，它会自动申请新的物理页来创建缺失的页表，并建立链接
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
