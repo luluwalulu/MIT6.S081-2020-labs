@@ -23,6 +23,7 @@ struct {
   struct run *freelist;
 } kmem;
 
+// 将所有空闲内存加入freelist中
 void
 kinit()
 {
@@ -43,6 +44,7 @@ freerange(void *pa_start, void *pa_end)
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
+// 使用头插法将以pa为首地址的物理页加入freelist中
 void
 kfree(void *pa)
 {

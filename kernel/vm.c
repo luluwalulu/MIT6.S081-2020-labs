@@ -86,22 +86,31 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
     panic("walk");
 
   for(int level = 2; level > 0; level--) {
+    // PX从虚拟地址va中提取当前层级的9位索引值
     pte_t *pte = &pagetable[PX(level, va)];
+    // PTE_V检查Valid位，*pte&PTE_V用来检查PTE是否有效
     if(*pte & PTE_V) {
+      // 取出PTE中的PA，作为下一级页表的物理地址
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
+      // 如果alloc没有置位或者不允许分配内存的话
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
+      // 初始化新的物理页
       memset(pagetable, 0, PGSIZE);
+      // 将PTE指向新分配的物理页并将其有效位置位
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
+  // 找到最后一级页表
   return &pagetable[PX(0, va)];
 }
 
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
+// va必须是页对齐的虚拟地址
+// walkaddr只负责查找，同时还带有安全检查，它会找到va映射的物理页的起始地址
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
@@ -118,6 +127,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
   if((*pte & PTE_U) == 0)
     return 0;
+  // 注意PTE2PA宏不会将va中的offset带入计算，PTE2PA得到的是物理页的起始地址
   pa = PTE2PA(*pte);
   return pa;
 }
@@ -156,6 +166,7 @@ kvmpa(uint64 va)
 // physical addresses starting at pa. va and size might not
 // be page-aligned. Returns 0 on success, -1 if walk() couldn't
 // allocate a needed page-table page.
+// 它在指定的 pagetable 中，为一段连续的虚拟地址范围 [va, va + size) 建立到一段连续物理地址范围 [pa, pa + size) 的映射，并设置权限 perm
 int
 mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
@@ -181,6 +192,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
+// 起始的va必须页对齐
+// do_free如果为1，同时释放对应的物理内存页，如果为0，只删除页表中的映射关系
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -201,12 +214,14 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
+    // 结束映射并将pte标记为了无效
     *pte = 0;
   }
 }
 
 // create an empty user page table.
 // returns 0 if out of memory.
+// 创建一张新的，空的用户页表
 pagetable_t
 uvmcreate()
 {
@@ -236,6 +251,7 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
 
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
+// 用于增加用户进程的内存空间
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
@@ -266,6 +282,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
 // process size.  Returns the new process size.
+// 减少用户空间
 uint64
 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
@@ -302,6 +319,7 @@ freewalk(pagetable_t pagetable)
 
 // Free user memory pages,
 // then free page-table pages.
+// 先删除页表
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
@@ -331,9 +349,12 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
+    // 申请内存
     if((mem = kalloc()) == 0)
       goto err;
+    // 粘贴内容
     memmove(mem, (char*)pa, PGSIZE);
+    // 建立映射
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
       kfree(mem);
       goto err;
@@ -348,6 +369,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
 // mark a PTE invalid for user access.
 // used by exec for the user stack guard page.
+// 将指定虚拟地址对应的页表项标记为用户不可访问
 void
 uvmclear(pagetable_t pagetable, uint64 va)
 {
@@ -362,16 +384,22 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
+// 将内容从内核拷贝到用户进程中
+// 需要先通过dstva找到对应的物理地址，再把数据从内核拷贝到物理地址中
+// 所有虚拟地址都需要先转换为物理地址才能进行操作
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
   while(len > 0){
+    // 先把va0页对齐
     va0 = PGROUNDDOWN(dstva);
+    // pa0是对应物理页的地址
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    // dstva-va0就是偏移量，n就是这张页表能够当作拷贝目标的量
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -379,6 +407,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
     len -= n;
     src += n;
+    // 不要忘了移动dstva
     dstva = va0 + PGSIZE;
   }
   return 0;
