@@ -44,14 +44,24 @@ freerange(void *pa_start, void *pa_end)
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
-// 使用头插法将以pa为首地址的物理页加入freelist中
+// 使用头插法将以pa为首地址的物理页加入freelist中(kfree需要的是物理地址)
 void
 kfree(void *pa)
 {
   struct run *r;
 
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
-    panic("kfree");
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP) {
+    if(((uint64)pa % PGSIZE)!=0){
+      panic("1");
+    }
+    else if((char*)pa < end){
+      panic("2");
+    }
+    else if((uint64)pa >= PHYSTOP){
+      panic("3");
+    }
+  }
+    
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);

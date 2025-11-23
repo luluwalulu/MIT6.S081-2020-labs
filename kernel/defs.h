@@ -180,8 +180,8 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t);
 void            proc_kvminit(struct proc* p);
-void            proc_freewalk(struct proc* p);
-void            freeUserPage(pagetable_t pagetable);
+void            proc_freewalk(pagetable_t pagetable);
+pte_t *         walk(pagetable_t pagetable, uint64 va, int alloc);
 
 // plic.c
 void            plicinit(void);

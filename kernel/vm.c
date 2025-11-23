@@ -209,6 +209,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // 起始的va必须页对齐
 // do_free如果为1，同时释放对应的物理内存页，如果为0，只删除页表中的映射关系
 // 该函数要求页表管理的虚拟地址空间必须是连续的空间，va到va + npages*PGSIZE的所有虚拟地址空间的映射关系都必须被切断
+
+// 总结：该函数用于将连续的虚拟地址的映射关系从页表中置零
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -314,6 +316,8 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
+// 在叶子页表项全部无效的情况下，将页表本身的内存释放
+// 即释放一个不含任何信息的页表的内存
 void
 freewalk(pagetable_t pagetable)
 {
@@ -568,26 +572,34 @@ proc_kvminit(struct proc* p)
 }
 
 void
-proc_freewalk(struct proc* p)
+proc_freewalk(pagetable_t pagetable)
 {
-  // 首先，需要遍历页表，将所有专门分配给用户进程的内存彻底释放，然后删除所有映射关系
-  kfree((void*)p->kstack);
-  freeUserPage(p->kpagetable);
-  freewalk(p->kpagetable);
-}
-
-void freeUserPage(pagetable_t pagetable){
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
+    // 如果pte指向页表
     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
-      // child就是下一级pagetable的物理地址
       uint64 child = PTE2PA(pte);
-      freeUserPage((pagetable_t)child);
-    }
-    // 如果有效，且属于用户，并且是最后一级，那就释放它
-    else if((pte & (PTE_V | PTE_U))){
-      uint64 pa = PTE2PA(pte);
-      kfree((void*)pa);
+      proc_freewalk((pagetable_t)child);
+      pagetable[i] = 0;
+    } 
+    // 如果pte指向物理内存
+    else if(pte & PTE_V){
+      pagetable[i]=0;
     }
   }
+  kfree((void*)pagetable);
 }
+
+// // 负责将所有叶子页表项置零
+// void freeUserPage(pagetable_t pagetable){
+//   for(int i = 0; i < 512; i++){
+//     pte_t pte = pagetable[i];
+//     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+//       uint64 child = PTE2PA(pte);
+//       freeUserPage((pagetable_t)child);
+//     } 
+//     else if(pte & PTE_V){
+//       pagetable[i]=0;
+//     }
+//   }
+// }

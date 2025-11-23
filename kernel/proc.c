@@ -134,9 +134,23 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+    
   if(p->kpagetable){
-    proc_freewalk(p);
+    // 先释放内核栈的内存，然后删除所有映射关系并释放页表本身占用的物理内存
+    if(p->kstack){
+      pte_t *pte=walk(p->kpagetable,p->kstack,0);
+      if(pte&&(*pte&PTE_V)){
+        uint64 pa=PTE2PA(*pte);
+        kfree((void*)pa);
+      }
+      else{
+        panic("proc_freewalk");
+      }
+    }
+
+    proc_freewalk(p->kpagetable);
   }
+
   p->kpagetable=0;
   p->pagetable = 0;
   p->sz = 0;
