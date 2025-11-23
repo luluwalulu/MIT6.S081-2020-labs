@@ -561,27 +561,28 @@ proc_kvminit(struct proc* p)
   // the highest virtual address in the kernel.
   proc_kvmmap(p,TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
+  pagetable_t pa2=kalloc();
   uint64 va = KSTACK((int) (p - proc)); 
-  proc_kvmmap(p, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  proc_kvmmap(p, va, (uint64)pa2, PGSIZE, PTE_R | PTE_W);
   p->kstack = va; // 记录虚拟地址
 }
 
 void
-proc_freewalk(pagetable_t pagetable)
+proc_freewalk(struct proc* p)
 {
   // 首先，需要遍历页表，将所有专门分配给用户进程的内存彻底释放，然后删除所有映射关系
-  freeUserPage(pagetable);
-  freewalk(pagetable);
+  kfree((void*)p->kstack);
+  freeUserPage(p->kpagetable);
+  freewalk(p->kpagetable);
 }
 
 void freeUserPage(pagetable_t pagetable){
-  kfree((void*)myproc()->kstack);
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
-      // 中间级
+      // child就是下一级pagetable的物理地址
       uint64 child = PTE2PA(pte);
-      freewalk((pagetable_t)child);
+      freeUserPage((pagetable_t)child);
     }
     // 如果有效，且属于用户，并且是最后一级，那就释放它
     else if((pte & (PTE_V | PTE_U))){

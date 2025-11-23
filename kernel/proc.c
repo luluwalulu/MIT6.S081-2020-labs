@@ -135,8 +135,9 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   if(p->kpagetable){
-    proc_freewalk(p->pagetable);
+    proc_freewalk(p);
   }
+  p->kpagetable=0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
