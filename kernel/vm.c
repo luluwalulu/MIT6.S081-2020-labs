@@ -5,6 +5,9 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
+
 
 /*
  * the kernel's page table.
@@ -14,6 +17,8 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+
+extern struct proc proc[NPROC]; // proc.h
 
 /*
  * create a direct-map page table for the kernel.
@@ -102,7 +107,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
-  // 找到最后一级页表
+  // 此时找到最后一级页表
+  // 然后返回最后一级页表中对应PTE的地址
   return &pagetable[PX(0, va)];
 }
 
@@ -153,7 +159,13 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pagetable_t kpt = kernel_pagetable;
+  struct proc *p = myproc();
+  if(p != 0) {
+    kpt = p->kpagetable; // 切换查询目标
+  }
+
+  pte = walk(kpt, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -192,8 +204,11 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
+// 在页表pagetable定义的地址空间中，从虚拟地址va开始，将npages个页表项置0（或者说删除npages个映射关系），如果需要的话释放对应的物理内存
+// 作用于pagetable的底层
 // 起始的va必须页对齐
 // do_free如果为1，同时释放对应的物理内存页，如果为0，只删除页表中的映射关系
+// 该函数要求页表管理的虚拟地址空间必须是连续的空间，va到va + npages*PGSIZE的所有虚拟地址空间的映射关系都必须被切断
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -319,7 +334,7 @@ freewalk(pagetable_t pagetable)
 
 // Free user memory pages,
 // then free page-table pages.
-// 先删除页表
+// 先将页表项置零（如果需要的话释放对应的物理内存），然后将页表本身占用的内存释放
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
@@ -478,5 +493,100 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  }
+}
+
+void vmprinter(pagetable_t pagetable,int dep){
+  if(dep==3) return;
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if(!pte&PTE_V) continue;
+    uint64 child = PTE2PA(pte);
+
+    for(int i=0;i<dep;i++)
+      printf(".. ");
+    printf("..%d: pte %p pa %p\n",i,pte,child);
+
+    vmprinter((pagetable_t)child,dep+1);
+  }
+}
+
+void vmprint(pagetable_t pagetable){
+  printf("page table %p\n",pagetable);
+  vmprinter(pagetable,0);
+}
+
+
+void
+proc_kvmmap(struct proc *p,uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(p->kpagetable, va, sz, pa, perm) != 0)
+    panic("kvmmap");
+}
+
+void
+proc_kvminit(struct proc* p)
+{
+  // 为最高一级page directory分配物理page
+  uint64* pa=(pagetable_t) kalloc();
+  if(pa==0){
+    panic("proc_kvminit1\n");
+  } 
+  p->kpagetable = pa;
+  // 将这段内存初始化为0
+  memset(p->kpagetable, 0, PGSIZE);
+
+  // etext是一个链接器符号，当你编译内核时，链接器(kernel.ld)会把所有机器指令拼在一起，最后在指令结束的地方打个标记即为etext
+  // (uint64)etext-KERNBASE刚好就是内核代码的总长度
+
+  // uart registers
+  proc_kvmmap(p,UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  proc_kvmmap(p,VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  proc_kvmmap(p,CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  proc_kvmmap(p,PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  proc_kvmmap(p,KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  proc_kvmmap(p,(uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  proc_kvmmap(p,TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  uint64 va = KSTACK((int) (p - proc)); 
+  proc_kvmmap(p, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va; // 记录虚拟地址
+}
+
+void
+proc_freewalk(pagetable_t pagetable)
+{
+  // 首先，需要遍历页表，将所有专门分配给用户进程的内存彻底释放，然后删除所有映射关系
+  freeUserPage(pagetable);
+  freewalk(pagetable);
+}
+
+void freeUserPage(pagetable_t pagetable){
+  kfree((void*)myproc()->kstack);
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // 中间级
+      uint64 child = PTE2PA(pte);
+      freewalk((pagetable_t)child);
+    }
+    // 如果有效，且属于用户，并且是最后一级，那就释放它
+    else if((pte & (PTE_V | PTE_U))){
+      uint64 pa = PTE2PA(pte);
+      kfree((void*)pa);
+    }
   }
 }
