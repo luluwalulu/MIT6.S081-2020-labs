@@ -91,6 +91,7 @@ userret:
         # usertrapret() calls here.
         # a0: TRAPFRAME, in user page table.
         # a1: user page table, for satp.
+        # a0和a1分别存储函数的两个参数
 
         # switch to the user page table.
         csrw satp, a1
