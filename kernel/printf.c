@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -132,3 +133,29 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void backtrace(){
+  printf("backtrace:\n");
+
+  // 当前帧的fp
+  uint64 fp=r_fp();
+  uint64 stackTop=PGROUNDUP(fp);
+  uint64 stackButtom=PGROUNDDOWN(fp);
+  uint64 ra;
+
+  // 我们在每一轮循环中，fp都指向当前栈帧，然后我们读取当前栈帧中ra的值并打印
+  // 接着把fp指向上一个栈帧
+  // 也就是在打印时，fp指向上一个栈帧，ra指向当前栈帧中的ra信息
+  while(fp<stackTop&&fp>stackButtom){
+    ra=fp-8;
+    printf("%p\n",*(uint64*)ra);
+
+    // fp本身是偏移量，fp-=8仍是偏移量，fp-=16这个地址的数据存储的才是我们想要的前一帧的偏移量
+    fp=*(uint64*)(fp-16);
+  }
+}
+// 我们发现，当fp==stackTop，即fp指向最上面的栈帧时，其中存储的ra是无效值
+// 这是因为当我们通过uservec调用usertrap时，我们通过汇编代码jr t0跳转到usertrap
+// jr指令，jr指令不会修改ra寄存器，它只是单纯改变PC值。所以此时ra可以认为是垃圾值
+
+
