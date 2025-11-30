@@ -25,6 +25,7 @@ static struct {
 
 static char digits[] = "0123456789abcdef";
 
+// xx是要打印的数字，base表示进制，sign为1表示xx是有符号数，sign为0表示xx是无符号数
 static void
 printint(int xx, int base, int sign)
 {
@@ -32,12 +33,14 @@ printint(int xx, int base, int sign)
   int i;
   uint x;
 
+  // sign=(xx<0)
   if(sign && (sign = xx < 0))
     x = -xx;
   else
     x = xx;
 
   i = 0;
+  // 最低有效位放在低地址
   do {
     buf[i++] = digits[x % base];
   } while((x /= base) != 0);
@@ -55,6 +58,7 @@ printptr(uint64 x)
   int i;
   consputc('0');
   consputc('x');
+  // 每次提取最高位的4位然后左移4位
   for (i = 0; i < (sizeof(uint64) * 2); i++, x <<= 4)
     consputc(digits[x >> (sizeof(uint64) * 8 - 4)]);
 }
@@ -67,6 +71,7 @@ printf(char *fmt, ...)
   int i, c, locking;
   char *s;
 
+  // printf的过程中持有锁
   locking = pr.locking;
   if(locking)
     acquire(&pr.lock);
@@ -74,17 +79,20 @@ printf(char *fmt, ...)
   if (fmt == 0)
     panic("null fmt");
 
+  // 让ap指向fmt后面的第一个参数
   va_start(ap, fmt);
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
       consputc(c);
       continue;
     }
+    // 遇到%直接读取下一个字符
     c = fmt[++i] & 0xff;
     if(c == 0)
       break;
     switch(c){
     case 'd':
+      // 每次调用 va_arg(ap, type)，就会读出一个指定类型的数据，并将指针后移
       printint(va_arg(ap, int), 10, 1);
       break;
     case 'x':
@@ -117,11 +125,12 @@ printf(char *fmt, ...)
 void
 panic(char *s)
 {
+  // locking为1时锁正常工作，locking为0时printf无视锁
   pr.locking = 0;
   printf("panic: ");
   printf(s);
   printf("\n");
-  panicked = 1; // freeze uart output from other CPUs
+  panicked = 1; // freeze uart output from other CPUs 禁用uartputc
   for(;;)
     ;
 }

@@ -38,12 +38,12 @@
 #define ReadReg(reg) (*(Reg(reg)))
 #define WriteReg(reg, v) (*(Reg(reg)) = (v))
 
-// the transmit output buffer.
+// the transmit output buffer.uart_tx_buf只用于向设备发送数据，从设备接受数据不会使用它
 struct spinlock uart_tx_lock;
 #define UART_TX_BUF_SIZE 32
 char uart_tx_buf[UART_TX_BUF_SIZE];
-int uart_tx_w; // write next to uart_tx_buf[uart_tx_w++]
-int uart_tx_r; // read next from uart_tx_buf[uar_tx_r++]
+int uart_tx_w; // write next to uart_tx_buf[uart_tx_w++]   向缓冲区中写
+int uart_tx_r; // read next from uart_tx_buf[uar_tx_r++]   从缓冲区中读，然后准备写给THR
 
 extern volatile int panicked; // from printf.c
 
@@ -83,6 +83,7 @@ uartinit(void)
 // because it may block, it can't be called
 // from interrupts; it's only suitable for use
 // by write().
+// CPU将console中的数
 void
 uartputc(int c)
 {
@@ -112,9 +113,13 @@ uartputc(int c)
 // use interrupts, for use by kernel printf() and
 // to echo characters. it spins waiting for the uart's
 // output register to be empty.
+// uartputc_sync函数不使用缓冲区也不适用中断，它会通过while循环等待，直到UART硬件的发送寄存器变空，然后直接把字符塞进去
+// 也就是说，uartputc_sync函数不依赖console
+// uartputc_sync直接让CPU向UART放置字符
 void
 uartputc_sync(int c)
 {
+  // 关闭中断
   push_off();
 
   if(panicked){
@@ -134,6 +139,8 @@ uartputc_sync(int c)
 // in the transmit buffer, send it.
 // caller must hold uart_tx_lock.
 // called from both the top- and bottom-half.
+// 如果UART的THR寄存器闲置，那么尝试发送数据。如果未闲置，函数终止
+// 抽象为启动UART，使其尝试写数据到THR寄存器上
 void
 uartstart()
 {
@@ -164,6 +171,7 @@ uartstart()
 // return -1 if none is waiting.
 int
 uartgetc(void)
+// 从RHR读数据
 {
   if(ReadReg(LSR) & 0x01){
     // input data is ready.
@@ -176,6 +184,7 @@ uartgetc(void)
 // handle a uart interrupt, raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from trap.c.
+// UART触发中断，CPU获取所有UART从设备接受的数据，然后启动UART
 void
 uartintr(void)
 {

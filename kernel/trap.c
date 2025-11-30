@@ -196,6 +196,8 @@ devintr()
     // the PLIC allows each device to raise at most one
     // interrupt at a time; tell the PLIC the device is
     // now allowed to interrupt again.
+    
+    // 即使irq无效，也必须去认领该irq(0除外)
     if(irq)
       plic_complete(irq);
 
