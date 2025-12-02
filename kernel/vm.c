@@ -305,6 +305,7 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+// allocproc已经为我们准备好一张空的用户页表
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
@@ -319,14 +320,23 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // 关闭父进程页表中的写标志位
+    (*(uint64*)pa)^=PTE_W;
+    flags=PTE_FLAGS(*pte);
+    if(mappages(new,i,PGSIZE,(uint64)pa,flags)!=0){
       goto err;
     }
+    
+
+
+    // flags = PTE_FLAGS(*pte);
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //   kfree(mem);
+    //   goto err;
+    // }
   }
   return 0;
 
