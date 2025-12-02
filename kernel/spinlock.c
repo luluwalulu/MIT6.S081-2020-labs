@@ -18,6 +18,7 @@ initlock(struct spinlock *lk, char *name)
 
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.
+// 负责获取锁。有关计数器和中断开关的事情调用push_off完成
 void
 acquire(struct spinlock *lk)
 {
@@ -36,6 +37,7 @@ acquire(struct spinlock *lk)
   // past this point, to ensure that the critical section's memory
   // references happen strictly after the lock is acquired.
   // On RISC-V, this emits a fence instruction.
+  // 告诉CPU，在执行这堵墙下面的任何指令之前，必须保证上面的所有指令全部完成且已生效
   __sync_synchronize();
 
   // Record info about lock acquisition for holding() and debugging.
@@ -43,6 +45,7 @@ acquire(struct spinlock *lk)
 }
 
 // Release the lock.
+// 负责释放锁，有关计数器和中断开关的事情由pop_off完成
 void
 release(struct spinlock *lk)
 {
@@ -57,6 +60,7 @@ release(struct spinlock *lk)
   // and that loads in the critical section occur strictly before
   // the lock is released.
   // On RISC-V, this emits a fence instruction.
+  // __sync_synchronize函数的作用范围是确保先于屏障的所有内存操作已经被执行（无论是不是在同一个函数中）
   __sync_synchronize();
 
   // Release the lock, equivalent to lk->locked = 0.
@@ -68,6 +72,7 @@ release(struct spinlock *lk)
   //   amoswap.w zero, zero, (s1)
   __sync_lock_release(&lk->locked);
 
+  // 如果计数为0就关闭中断
   pop_off();
 }
 
@@ -84,13 +89,18 @@ holding(struct spinlock *lk)
 // push_off/pop_off are like intr_off()/intr_on() except that they are matched:
 // it takes two pop_off()s to undo two push_off()s.  Also, if interrupts
 // are initially off, then push_off, pop_off leaves them off.
+// 这两个函数只是辅助release和acquire工作，并不真正获取锁和释放锁
 
 void
 push_off(void)
+// 兼具计数器和保存中断状态并关闭中断的责任
 {
+  // old保存了一开始的中断打开状态，只在第一次调用时被使用，之后不被使用
   int old = intr_get();
 
   intr_off();
+
+  // 该条件判断仅在锁的数量为零时成立，此时我们需要记录使用锁之前是否打开中断，以便将来进行恢复
   if(mycpu()->noff == 0)
     mycpu()->intena = old;
   mycpu()->noff += 1;
@@ -98,6 +108,7 @@ push_off(void)
 
 void
 pop_off(void)
+// 兼具计数器和恢复最初中断状态的责任
 {
   struct cpu *c = mycpu();
   if(intr_get())
@@ -105,6 +116,8 @@ pop_off(void)
   if(c->noff < 1)
     panic("pop_off");
   c->noff -= 1;
+
+  // 必须要计数为0并且使用锁之前原本打开中断，才需要intr_on
   if(c->noff == 0 && c->intena)
     intr_on();
 }
