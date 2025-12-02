@@ -320,6 +320,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+    // 打开cow页面标志（如果本来就可写）
+    if(*pte&PTE_W==1)
+    (*(uint64*)pa)|=(1L<<9);
     // 关闭父进程页表中的写标志位
     (*(uint64*)pa)^=PTE_W;
     flags=PTE_FLAGS(*pte);

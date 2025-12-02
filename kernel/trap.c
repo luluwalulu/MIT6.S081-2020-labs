@@ -67,6 +67,27 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 15){
+    // page fault触发
+    uint64 va=r_stval();
+    // va应该进行页对齐操作(mappages中也会进行这一步)
+    va=PGROUNDDOWN(va);
+    pte_t* pte = walk(p->pagetable,va,0);
+    // 必须是cow页
+    if(*pte&(1L<<9)==1){
+      char* mem;
+      uint64 pa=PTE2PA(*pte);
+      // 打开页表中的写标志位
+      (*(uint64*)pte)|=PTE_W;
+      // 关闭cow页面标志
+      (*(uint64*)pa)^=(1L<<9);
+      if((mem = kalloc()) == 0) panic("usertrap->kalloc");
+      memmove(mem, (char*)pa, PGSIZE);
+      if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
+        kfree(mem);
+      }
+
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
