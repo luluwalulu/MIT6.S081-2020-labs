@@ -71,23 +71,39 @@ usertrap(void)
 
     syscall();
   } else if(r_scause() == 15 && (*pte&(1L<<9))){
-    char* mem;
-    uint64 pa=PTE2PA(*pte);
-    // 打开页表中的写标志位
-    (*(uint64*)pte)|=PTE_W;
-    // 关闭cow页面标志
-    (*(uint64*)pte)^=(1L<<9);
-    if((mem = kalloc()) != 0) {
-      memmove(mem, (char*)pa, PGSIZE);
-      // 在建立映射之前，还需要先将页表中的pte失效
-      (*pte)^=PTE_V;
-      if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
-        kfree(mem);
-      }
-      kfree((void*)pa);
+    // char* mem;
+    // uint64 pa=PTE2PA(*pte);
+    // // 打开页表中的写标志位
+    // (*(uint64*)pte)|=PTE_W;
+    // // 关闭cow页面标志
+    // (*(uint64*)pte)^=(1L<<9);
+    // if((mem = kalloc()) != 0) {
+    //   memmove(mem, (char*)pa, PGSIZE);
+    //   // 在建立映射之前，还需要先将页表中的pte失效
+    //   (*pte)^=PTE_V;
+    //   if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
+    //     kfree(mem);
+    //     p->killed=1;
+    //   }
+    //   else
+    //     kfree((void*)pa);
+    // }
+    // else{
+    //   p->killed=1;
+    // }
+    // 可以直接修改对应的pte，而不是重新去建立映射
+    char *mem=kalloc();
+    if(mem==0){
+      p->killed=1;
     }
     else{
-      p->killed=1;
+      uint64 pa=PTE2PA(*pte);
+      memmove(mem,(char*)pa,PGSIZE);
+      uint flags=PTE_FLAGS(*pte);
+      flags|=PTE_W;
+      flags&= ~(1L<<9);
+      *pte=PA2PTE(mem)|flags;
+      kfree((void*)pa);
     }
   } else if((which_dev = devintr()) != 0){
     // ok
@@ -97,8 +113,11 @@ usertrap(void)
     p->killed = 1;
   }
 
-  if(p->killed)
+  if(p->killed){
+    printf("page_inuse:%d\n",page_inuse);
     exit(-1);
+  }
+    
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)

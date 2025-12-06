@@ -325,17 +325,19 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
     // 如果仍可写，说明是父进程第一次fork，关闭写标志位，打开cow页面标志
     if((*pte & PTE_W)){
-      (*(uint64*)pte)^=PTE_W;
+      *pte &= ~PTE_W;
       (*(uint64*)pte)|=(1L<<9);
     }
 
     flags=PTE_FLAGS(*pte);
 
+    inCount((uint64)pa);
     if(mappages(new,i,PGSIZE,(uint64)pa,flags)!=0){
+      kfree((void*)pa);
       goto err;
     }
-
-    inCount((uint64)pa);
+    asm volatile("sfence.vma");
+    
     
 
 
@@ -383,25 +385,35 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
       return -1;
     }
     pte_t* pte=walk(pagetable,va0,0);
-    if(pte == 0){
-      return -1;
-    }
-    char* mem;
+
     // 如果是cow页的话
     if((uint64)(*pte)&(1L<<9)){
-      // 打开页表中的写标志位
-      (*(uint64*)pte)|=PTE_W;
-      // 关闭cow页面标志
-      (*(uint64*)pte)^=(1L<<9);
-      if((mem = kalloc()) == 0) panic("usertrap->kalloc");
-      memmove(mem, (char*)pa0, PGSIZE);
-      // 在建立映射之前，还需要先将页表中的pte失效
-      (*pte)^=PTE_V;
-      if(mappages(pagetable, va0, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
-        kfree(mem);
+      char *mem=kalloc();
+      if(mem==0){
+        return -1;
       }
-      kfree((void*)pa0);
-      pa0=(uint64)mem;
+      else{
+        memmove(mem,(char*)pa0,PGSIZE);
+        uint64 flags=PTE_FLAGS(*pte);
+        flags|=PTE_W;
+        flags&=(~(1L<<9));
+        *pte=(PA2PTE(mem)|flags);
+        kfree((void*)pa0);
+        pa0=(uint64)mem;
+      }
+      // // 打开页表中的写标志位
+      // (*(uint64*)pte)|=PTE_W;
+      // // 关闭cow页面标志
+      // (*(uint64*)pte)^=(1L<<9);
+      // if((mem = kalloc()) == 0) panic("usertrap->kalloc");
+      // memmove(mem, (char*)pa0, PGSIZE);
+      // // 在建立映射之前，还需要先将页表中的pte失效
+      // (*pte)^=PTE_V;
+      // if(mappages(pagetable, va0, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
+      //   kfree(mem);
+      // }
+      // kfree((void*)pa0);
+      // pa0=(uint64)mem;
     }
     n = PGSIZE - (dstva - va0);
     if(n > len)

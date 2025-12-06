@@ -65,8 +65,9 @@ void            kfree(void *);
 void            kinit(void);
 // int*            getcouTable();
 // void            couloBack();
-void            deCount(uint64 pa);
+int             deCount(uint64 pa);
 void            inCount(uint64 pa);
+extern int      page_inuse;
 
 // log.c
 void            initlog(int, struct superblock*);
