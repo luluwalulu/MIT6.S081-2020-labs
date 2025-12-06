@@ -21,6 +21,7 @@ extern char trampoline[]; // trampoline.S
 void
 kvminit()
 {
+  
   kernel_pagetable = (pagetable_t) kalloc();
   memset(kernel_pagetable, 0, PGSIZE);
 
@@ -154,8 +155,10 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
   for(;;){
+    // pte是通过虚拟地址查找到的物理地址的结果
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
+    // 如果虚拟地址对应的pte已经有效，就会报错remap
     if(*pte & PTE_V)
       panic("remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
@@ -312,7 +315,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -320,15 +322,20 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    // 打开cow页面标志（如果本来就可写）
-    if(*pte&PTE_W==1)
-    (*(uint64*)pa)|=(1L<<9);
-    // 关闭父进程页表中的写标志位
-    (*(uint64*)pa)^=PTE_W;
+
+    // 如果仍可写，说明是父进程第一次fork，关闭写标志位，打开cow页面标志
+    if((*pte & PTE_W)){
+      (*(uint64*)pte)^=PTE_W;
+      (*(uint64*)pte)|=(1L<<9);
+    }
+
     flags=PTE_FLAGS(*pte);
+
     if(mappages(new,i,PGSIZE,(uint64)pa,flags)!=0){
       goto err;
     }
+
+    inCount((uint64)pa);
     
 
 
@@ -371,9 +378,31 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+    pa0=walkaddr(pagetable,va0);
+    if(pa0==0){
       return -1;
+    }
+    pte_t* pte=walk(pagetable,va0,0);
+    if(pte == 0){
+      return -1;
+    }
+    char* mem;
+    // 如果是cow页的话
+    if((uint64)(*pte)&(1L<<9)){
+      // 打开页表中的写标志位
+      (*(uint64*)pte)|=PTE_W;
+      // 关闭cow页面标志
+      (*(uint64*)pte)^=(1L<<9);
+      if((mem = kalloc()) == 0) panic("usertrap->kalloc");
+      memmove(mem, (char*)pa0, PGSIZE);
+      // 在建立映射之前，还需要先将页表中的pte失效
+      (*pte)^=PTE_V;
+      if(mappages(pagetable, va0, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
+        kfree(mem);
+      }
+      kfree((void*)pa0);
+      pa0=(uint64)mem;
+    }
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;

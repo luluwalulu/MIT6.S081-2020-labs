@@ -8,6 +8,10 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "proc.h"
+
+int countTable[(PHYSTOP-KERNBASE)/4096];
+struct spinlock coulock;
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -26,6 +30,7 @@ struct {
 void
 kinit()
 {
+  memset(countTable,0,(PHYSTOP-KERNBASE)/4096);
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
@@ -50,6 +55,13 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  
+  if(countTable[((uint64)pa-KERNBASE)/4096]>0)
+    deCount((uint64)pa);
+  if(countTable[((uint64)pa-KERNBASE)/4096]!=0){
+    return;
+  }
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -76,7 +88,37 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
+  // usertests会测试内存耗尽时（即r返回0时）的情景，r为0时下面的数组会越界
+  if(r){
+    acquire(&coulock);
+    countTable[((uint64)r-KERNBASE)/4096]=1;
+    release(&coulock);
+  }
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+    
   return (void*)r;
 }
+
+// int * getcouTable() {
+//   acquire(&coulock);
+//   return countTable;
+// }
+
+// void couloBack(){
+//   release(&coulock);
+// }
+
+void deCount(uint64 pa){
+  acquire(&coulock);
+  countTable[(pa-KERNBASE)/4096]--;
+  release(&coulock);
+}
+
+void inCount(uint64 pa){
+  acquire(&coulock);
+  countTable[(pa-KERNBASE)/4096]++;
+  release(&coulock);
+}
+
+

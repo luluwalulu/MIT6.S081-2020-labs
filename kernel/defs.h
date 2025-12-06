@@ -63,6 +63,10 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+// int*            getcouTable();
+// void            couloBack();
+void            deCount(uint64 pa);
+void            inCount(uint64 pa);
 
 // log.c
 void            initlog(int, struct superblock*);
