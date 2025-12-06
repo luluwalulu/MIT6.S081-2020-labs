@@ -94,6 +94,7 @@ usertrap(void)
     // 可以直接修改对应的pte，而不是重新去建立映射
     char *mem=kalloc();
     if(mem==0){
+      printf("usertrap: kalloc failed\n");
       p->killed=1;
     }
     else{

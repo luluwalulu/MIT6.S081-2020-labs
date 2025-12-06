@@ -334,6 +334,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     inCount((uint64)pa);
     if(mappages(new,i,PGSIZE,(uint64)pa,flags)!=0){
       kfree((void*)pa);
+      printf("copyout free %p\n", pa);
       goto err;
     }
     asm volatile("sfence.vma");
@@ -377,47 +378,48 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t *pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0=walkaddr(pagetable,va0);
-    if(pa0==0){
+    if(va0 >= MAXVA) 
       return -1;
-    }
-    pte_t* pte=walk(pagetable,va0,0);
+    pte = walk(pagetable, va0, 0);
+    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
+      return -1;
 
-    // 如果是cow页的话
-    if((uint64)(*pte)&(1L<<9)){
-      char *mem=kalloc();
-      if(mem==0){
-        return -1;
-      }
-      else{
-        memmove(mem,(char*)pa0,PGSIZE);
-        uint64 flags=PTE_FLAGS(*pte);
-        flags|=PTE_W;
-        flags&=(~(1L<<9));
-        *pte=(PA2PTE(mem)|flags);
-        kfree((void*)pa0);
-        pa0=(uint64)mem;
-      }
-      // // 打开页表中的写标志位
-      // (*(uint64*)pte)|=PTE_W;
-      // // 关闭cow页面标志
-      // (*(uint64*)pte)^=(1L<<9);
-      // if((mem = kalloc()) == 0) panic("usertrap->kalloc");
-      // memmove(mem, (char*)pa0, PGSIZE);
-      // // 在建立映射之前，还需要先将页表中的pte失效
-      // (*pte)^=PTE_V;
-      // if(mappages(pagetable, va0, PGSIZE, (uint64)mem, PTE_FLAGS(*pte)) != 0){
-      //   kfree(mem);
-      // }
-      // kfree((void*)pa0);
-      // pa0=(uint64)mem;
+    pa0 = PTE2PA(*pte);
+    if(*pte & (1L << 9)) {
+      char *mem = kalloc();
+      if(mem == 0) return -1;
+
+      // 拷贝旧数据
+      memmove(mem, (char*)pa0, PGSIZE);
+
+      // 修改标志位
+      uint64 flags = PTE_FLAGS(*pte);
+      flags |= PTE_W;       // 打开写权限
+      flags &= ~(1L << 9);  // 关闭 COW 标志
+
+      // 原地更新 PTE
+      *pte = PA2PTE(mem) | flags;
+
+      // 【关键】释放旧物理页引用
+      kfree((void*)pa0);
+
+      // 更新 pa0 指向新内存，供下面的 memmove 使用
+      pa0 = (uint64)mem;
+    } 
+    else {
+        if((*pte & PTE_W) == 0) return -1;
     }
+
+    // 计算本页剩余长度
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
+    
+    // 执行实际的物理内存拷贝
     memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
