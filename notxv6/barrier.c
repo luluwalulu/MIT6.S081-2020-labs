@@ -30,7 +30,28 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  pthread_mutex_lock(&bstate.barrier_mutex);
+  bstate.nthread++;
+  int last=0;
   
+  // 最后一个到达屏障的进程负责唤醒
+  if(bstate.nthread==nthread){
+    pthread_cond_broadcast(&bstate.barrier_cond);
+    last=1;
+  }
+  else{
+    // 其他进程在这里阻塞
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+  }
+
+  // 醒来之后只有最后一个到达的线程持有锁，由该线程将初始化nthread并递增round
+  // 这个最后一个到达的线程可能以极快的速度到达下一轮屏障并获取锁，然后将nthread++
+  // 导致上一轮醒来的线程可能看到nthread不为0，然后误以为nthread还没有清零，因此必须引入last
+  if(bstate.nthread!=0&&last){
+    bstate.nthread=0;
+    bstate.round++;
+  }
+  pthread_mutex_unlock(&bstate.barrier_mutex);
 }
 
 static void *
@@ -42,6 +63,13 @@ thread(void *xa)
 
   for (i = 0; i < 20000; i++) {
     int t = bstate.round;
+    // if (i != t) {
+    // // 必须用 stderr，防止因为缓冲区没刷新导致打印不出来
+    // fprintf(stderr, "ASSERT FAIL: i = %d, t = %d\n", i, t);
+    // }
+    // if(i==t){
+    //   fprintf(stderr, "SUCCESS: i = %d, t = %d\n", i, t);
+    // }
     assert (i == t);
     barrier();
     usleep(random() % 100);
