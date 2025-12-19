@@ -24,7 +24,6 @@
 #include "buf.h"
 
 struct {
-  struct spinlock lock;
   struct buf buf[NBUF];
 
   // Linked list of all buffers, through prev/next.
@@ -32,6 +31,7 @@ struct {
   // head.next is most recent, head.prev is least.
   // struct buf head;
   struct buf bucket[13];
+  struct spinlock locks[13];
 } bcache;
 
 void
@@ -39,7 +39,7 @@ binit(void)
 {
   struct buf *b;
 
-  initlock(&bcache.lock, "bcache");
+  for(int i=0;i<13;i++) initlock(&bcache.locks[i],"bcache");
 
   // 初始化所有桶中的首节点
   for(int i=0;i<12;i++){
@@ -48,7 +48,7 @@ binit(void)
   struct buf* prev=&bcache.bucket[0];
   // 一开始把所有buf都放在bucket[0]当中
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    initsleeplock(&b->lock,"bcache");
+    initsleeplock(&b->lock,"buffer");
     prev->next=b;
     prev=b;
   }
@@ -72,34 +72,63 @@ binit(void)
 static struct buf*
 bget(uint dev, uint blockno)
 {
-  struct buf *b;
-
-  acquire(&bcache.lock);
+  struct buf *b,*prev;
+  int bucket=blockno%13;
+  acquire(&bcache.locks[bucket]);
 
   // 查找的块是否已经存在于哈希表中
-  for(b = bcache.bucket[blockno%13].next; b != 0; b = b->next){
+  for(b = bcache.bucket[bucket].next; b != 0; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
-      release(&bcache.lock);
+      release(&bcache.locks[bucket]);
       acquiresleep(&b->lock);
       return b;
     }
   }
 
   // 如果未存在，当前桶是否有空闲块可以直接存储数据
-  for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
+  for(b = bcache.bucket[bucket].next; b != 0; b = b->next){
     if(b->refcnt == 0) {
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
       b->refcnt = 1;
-      release(&bcache.lock);
+      release(&bcache.locks[bucket]);
       acquiresleep(&b->lock);
       return b;
     }
   }
 
+  release(&bcache.locks[bucket]);
+
+
   // 如果当前桶也没有空闲块，那么遍历整个哈希表寻找空闲块
+
+  for(int i=(bucket+1)%13;i!=bucket;i=(i+1%13)){
+    acquire(&bcache.locks[i]);
+    for(b = bcache.bucket[i].next,prev=&bcache.bucket[i]; b != 0; prev=b,b = b->next){
+      // 如果在其他桶中发现空闲块，那么直接将空闲块移到bucket中
+      if(b->refcnt == 0) {
+        b->dev = dev;
+        b->blockno = blockno;
+        b->valid = 0;
+        b->refcnt = 1;
+        // 将当前空闲块移动到bucket当中
+        acquire(&bcache.locks[bucket]);
+        prev->next=b->next;
+        struct buf* temp;
+        for(temp=&bcache.bucket[bucket];temp->next!=0;temp=temp->next);
+        temp->next=b;
+        b->next=0;
+
+        acquiresleep(&b->lock);
+        release(&bcache.locks[i]);
+        release(&bcache.locks[bucket]);
+        return b;
+      }
+    }
+    release(&bcache.locks[i]);
+  }
   panic("bget: no buffers");
 }
 
@@ -135,34 +164,26 @@ brelse(struct buf *b)
     panic("brelse");
 
   releasesleep(&b->lock);
-
-  acquire(&bcache.lock);
+  // 在这一步中，b不会从一个桶移动到另一个桶中
+  // 如果brelse正确使用的话，那么b的refcnt一定不会为0，b一定不会被移动
+  // 我一定获取的是正确的锁
+  acquire(&bcache.locks[b->blockno%13]);
   b->refcnt--;
-  if (b->refcnt == 0) {
-    // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
-  }
-  
-  release(&bcache.lock);
+  release(&bcache.locks[b->blockno%13]);
 }
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  acquire(&bcache.locks[b->blockno%13]);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&bcache.locks[b->blockno%13]);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  acquire(&bcache.locks[b->blockno%13]);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bcache.locks[b->blockno%13]);
 }
 
 
