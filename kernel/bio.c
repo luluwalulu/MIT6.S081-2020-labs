@@ -76,8 +76,8 @@ bget(uint dev, uint blockno)
 
   acquire(&bcache.lock);
 
-  // Is the block already cached?
-  for(b = bcache.head.next; b != &bcache.head; b = b->next){
+  // 查找的块是否已经存在于哈希表中
+  for(b = bcache.bucket[blockno%13].next; b != 0; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
       release(&bcache.lock);
@@ -86,8 +86,7 @@ bget(uint dev, uint blockno)
     }
   }
 
-  // Not cached.
-  // Recycle the least recently used (LRU) unused buffer.
+  // 如果未存在，当前桶是否有空闲块可以直接存储数据
   for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
     if(b->refcnt == 0) {
       b->dev = dev;
@@ -99,6 +98,8 @@ bget(uint dev, uint blockno)
       return b;
     }
   }
+
+  // 如果当前桶也没有空闲块，那么遍历整个哈希表寻找空闲块
   panic("bget: no buffers");
 }
 
