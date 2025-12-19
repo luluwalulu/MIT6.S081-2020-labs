@@ -30,7 +30,8 @@ struct {
   // Linked list of all buffers, through prev/next.
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
-  struct buf head;
+  // struct buf head;
+  struct buf bucket[13];
 } bcache;
 
 void
@@ -40,16 +41,29 @@ binit(void)
 
   initlock(&bcache.lock, "bcache");
 
-  // Create linked list of buffers
-  bcache.head.prev = &bcache.head;
-  bcache.head.next = &bcache.head;
-  for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    initsleeplock(&b->lock, "buffer");
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+  // 初始化所有桶中的首节点
+  for(int i=0;i<12;i++){
+    bcache.bucket[i].next=0;
   }
+  struct buf* prev=&bcache.bucket[0];
+  // 一开始把所有buf都放在bucket[0]当中
+  for(b = bcache.buf; b < bcache.buf+NBUF; b++){
+    initsleeplock(&b->lock,"bcache");
+    prev->next=b;
+    prev=b;
+  }
+  prev->next=0;
+
+  // Create linked list of buffers
+  // bcache.head.prev = &bcache.head;
+  // bcache.head.next = &bcache.head;
+  // for(b = bcache.buf; b < bcache.buf+NBUF; b++){
+  //   b->next = bcache.head.next;
+  //   b->prev = &bcache.head;
+  //   initsleeplock(&b->lock, "buffer");
+  //   bcache.head.next->prev = b;
+  //   bcache.head.next = b;
+  // }
 }
 
 // Look through buffer cache for block on device dev.
