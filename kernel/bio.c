@@ -104,7 +104,7 @@ bget(uint dev, uint blockno)
 
   // 如果当前桶也没有空闲块，那么遍历整个哈希表寻找空闲块
 
-  for(int i=(bucket+1)%13;i!=bucket;i=(i+1%13)){
+  for(int i=(bucket+1)%13;i!=bucket;i=((i+1)%13)){
     acquire(&bcache.locks[i]);
     for(b = bcache.bucket[i].next,prev=&bcache.bucket[i]; b != 0; prev=b,b = b->next){
       // 如果在其他桶中发现空闲块，那么直接将空闲块移到bucket中
