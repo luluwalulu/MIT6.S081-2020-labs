@@ -430,7 +430,7 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
   
-
+  //
   panic("bmap: out of range");
 }
 
