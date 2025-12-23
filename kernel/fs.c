@@ -468,13 +468,15 @@ itrunc(struct inode *ip)
     a=(uint*)bp->data;
     for(i=0;i<NINDIRECT;i++){
       // b中是一级块的数据
-      bp2=bread(ip->dev,a[i]);
-      b=(uint*)bp2->data;
-      for(int j=0;j<NINDIRECT;j++){
-        if(b[j])
-          bfree(ip->dev,b[j]);
+      if(a[i]){
+        bp2=bread(ip->dev,a[i]);
+        b=(uint*)bp2->data;
+        for(j=0;j<NINDIRECT;j++){
+          if(b[j])
+            bfree(ip->dev,b[j]);
+        }
+        brelse(bp2);
       }
-      brelse(bp2);
     }
     brelse(bp);
     bfree(ip->dev,ip->addrs[NDIRECT+1]);
