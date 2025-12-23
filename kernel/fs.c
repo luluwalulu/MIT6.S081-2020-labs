@@ -393,6 +393,7 @@ bmap(struct inode *ip, uint bn)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
+    // 检查一级间接块对应位置是否存储了直接块的块号
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
       log_write(bp);
@@ -400,6 +401,35 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn-=NINDIRECT;
+
+  if(bn<NININDIRECT){
+    // 这里addr其实是块号
+    if((addr=ip->addrs[NDIRECT+1])==0)
+      ip->addrs[NDIRECT+1]=addr=balloc(ip->dev);
+    // bp是二级间接块
+    bp=bread(ip->dev,addr);
+    // blocknum用于在二级间接块中索引一级间接块，bn用于在一级间接块中找到直接块号
+    int blocknum=bn/NINDIRECT;
+    bn%=NINDIRECT;
+    a=(uint*)bp->data;
+    if((addr=a[blocknum])==0){
+      a[blocknum]=addr=balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    //现在addr是一级间接块的块号了
+    bp=bread(ip->dev,addr);
+    a=(uint*)bp->data;
+    if((addr=a[bn])==0){
+      a[bn]=addr=balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+  
 
   panic("bmap: out of range");
 }
