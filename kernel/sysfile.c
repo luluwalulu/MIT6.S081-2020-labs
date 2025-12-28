@@ -486,5 +486,20 @@ sys_pipe(void)
 }
 
 uint64 sys_symlink(void){
-  
+  char path[MAXPATH],target[MAXPATH],*name;
+  if(argstr(0, target, MAXPATH) < 0 || argstr(0, path, MAXPATH) < 0){
+    return -1;
+  }
+
+  struct inode* ip=create(path,T_SYMLINK,0,0);
+  if(ip==0) return -1;
+
+  int i=0;
+  while(i<MAXPATH){
+    if(target[i++]=='\0')
+      break;
+  }
+  writei(ip,0,(uint64)target,0,i);
+
+  return 0;
 }
