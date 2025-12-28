@@ -413,21 +413,11 @@ bmap(struct inode *ip, uint bn)
     // blocknum用于在二级间接块中索引一级间接块，bn用于在一级间接块中找到直接块号
     int blocknum=bn/NINDIRECT;
     bn%=NINDIRECT;
-    if(blocknum>=NINDIRECT||bn>=NINDIRECT){
-      panic("here");
-    }
     a=(uint*)bp->data;
     if((addr=a[blocknum])==0){
       a[blocknum]=addr=balloc(ip->dev);
-      // 立即把这个块读出来清零
-      struct buf*temp=bread(ip->dev,addr);
-      memset(temp->data,0,BSIZE);
-      log_write(temp);
-      brelse(temp);
-
       log_write(bp);
     }
-    
 
     //现在addr是一级间接块的块号了
     bp2=bread(ip->dev,addr);
@@ -438,9 +428,6 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp2);
     brelse(bp);
-    if(addr==270544960){
-      panic("there");
-    }
     return addr;
   }
   
