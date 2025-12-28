@@ -244,8 +244,10 @@ create(char *path, short type, short major, short minor)
   struct inode *ip, *dp;
   char name[DIRSIZ];
 
-  if((dp = nameiparent(path, name)) == 0)
+  if((dp = nameiparent(path, name)) == 0){
+    // printf("create1\n");
     return 0;
+  }
 
   ilock(dp);
 
@@ -255,6 +257,7 @@ create(char *path, short type, short major, short minor)
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
+    // printf("create2\n");
     return 0;
   }
 
@@ -331,8 +334,8 @@ sys_open(void)
   }
 
   int loop=10;
+  char name[DIRSIZ];
   while(ip->type==T_SYMLINK&& !(omode&O_NOFOLLOW)&&loop--){
-    char path[MAXPATH],*name;
     struct inode* dp,*temp;
 
     readi(ip,0,(uint64)path,0,MAXPATH);
@@ -512,21 +515,21 @@ sys_pipe(void)
 }
 
 uint64 sys_symlink(void){
-  char path[MAXPATH],target[MAXPATH],*name;
-  if(argstr(0, target, MAXPATH) < 0 || argstr(0, path, MAXPATH) < 0){
+  char path[MAXPATH],target[MAXPATH];
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0){
     return -1;
   }
 
   begin_op();
 
+  // printf("target=%s\n",target);
+  // printf("path=%s\n",path);
   struct inode* ip=create(path,T_SYMLINK,0,0);
-  if(ip==0) return -1;
-
-  int i=0;
-  while(i<MAXPATH){
-    if(target[i++]=='\0')
-      break;
+  if(ip==0) {
+    return -1;
   }
+  int i=0;
+  while(i<MAXPATH&&target[i++]!='\0');
   writei(ip,0,(uint64)target,0,i);
   iunlockput(ip);
   end_op();
