@@ -25,9 +25,9 @@ struct superblock {
 #define FSMAGIC 0x10203040
 
 #define NDIRECT 11
-#define NINDIRECT (BSIZE / sizeof(uint))
-#define NININDIRECT NINDIRECT*NINDIRECT
-#define MAXFILE (NDIRECT + NINDIRECT + NININDIRECT)
+#define NINDIRECT (BSIZE / sizeof(uint))     // 值为256
+#define NININDIRECT NINDIRECT*NINDIRECT      // 256*256
+#define MAXFILE (NDIRECT + NINDIRECT + NININDIRECT) //256*256+256+11
 
 // On-disk inode structure
 struct dinode {
