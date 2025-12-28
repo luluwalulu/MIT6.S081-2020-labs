@@ -491,6 +491,8 @@ uint64 sys_symlink(void){
     return -1;
   }
 
+  begin_op();
+
   struct inode* ip=create(path,T_SYMLINK,0,0);
   if(ip==0) return -1;
 
@@ -501,6 +503,7 @@ uint64 sys_symlink(void){
   }
   writei(ip,0,(uint64)target,0,i);
   iunlockput(ip);
+  end_op();
 
   return 0;
 }
