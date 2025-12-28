@@ -326,19 +326,15 @@ sys_open(void)
   }
 
   int loop=10;
-  char name[DIRSIZ];
   while(ip->type==T_SYMLINK&& !(omode&O_NOFOLLOW)&&loop--){
-    struct inode* dp,*temp;
     readi(ip,0,(uint64)path,0,MAXPATH);
-    iunlock(ip);
-    dp = nameiparent(path,name);
-    temp=dirlookup(dp,name,0);
-    if(temp!=0){
-      iput(ip); ip=temp;
+    iunlockput(ip);
+    // bug修复：为避免死锁，此时不持有任何锁
+    ip=namei(path);
+    if(ip!=0){
       ilock(ip);
     }
     else{
-      iput(ip);
       end_op();
       return -1;
     }
