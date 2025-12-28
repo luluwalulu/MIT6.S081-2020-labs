@@ -378,7 +378,7 @@ static uint
 bmap(struct inode *ip, uint bn)
 {
   uint addr, *a;
-  struct buf *bp,*bp2;
+  struct buf *bp;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0)
@@ -418,15 +418,15 @@ bmap(struct inode *ip, uint bn)
       a[blocknum]=addr=balloc(ip->dev);
       log_write(bp);
     }
+    brelse(bp);
 
     //现在addr是一级间接块的块号了
-    bp2=bread(ip->dev,addr);
-    a=(uint*)bp2->data;
+    bp=bread(ip->dev,addr);
+    a=(uint*)bp->data;
     if((addr=a[bn])==0){
       a[bn]=addr=balloc(ip->dev);
-      log_write(bp2);
+      log_write(bp);
     }
-    brelse(bp2);
     brelse(bp);
     return addr;
     
