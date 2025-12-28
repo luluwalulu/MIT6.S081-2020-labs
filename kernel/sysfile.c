@@ -325,28 +325,20 @@ sys_open(void)
     return -1;
   }
 
-  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
-    if(f)
-      fileclose(f);
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
-
   int loop=10;
   char name[DIRSIZ];
   while(ip->type==T_SYMLINK&& !(omode&O_NOFOLLOW)&&loop--){
     struct inode* dp,*temp;
-
     readi(ip,0,(uint64)path,0,MAXPATH);
+    iunlock(ip);
     dp = nameiparent(path,name);
     temp=dirlookup(dp,name,0);
     if(temp!=0){
-      iunlockput(ip); ip=temp;
+      iput(ip); ip=temp;
       ilock(ip);
     }
     else{
-      iunlockput(ip);
+      iput(ip);
       end_op();
       return -1;
     }
@@ -359,6 +351,13 @@ sys_open(void)
     return -1;
   }
 
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+    if(f)
+      fileclose(f);
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
 
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
