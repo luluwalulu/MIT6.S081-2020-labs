@@ -352,7 +352,8 @@ sys_open(void)
     }
   }
 
-  if(ip->type==T_SYMLINK){
+  // 如果类型为T_SYMLINK并且没有打开NOFOLLOW
+  if(ip->type==T_SYMLINK&&!(omode&O_NOFOLLOW)){
     iunlockput(ip);
     end_op();
     return -1;
