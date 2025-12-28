@@ -45,10 +45,14 @@ static int
 stat_slink(char *pn, struct stat *st)
 {
   int fd = open(pn, O_RDONLY | O_NOFOLLOW);
-  if(fd < 0)
+  if(fd < 0){
+    // printf("stat_slink1\n");
     return -1;
-  if(fstat(fd, st) != 0)
+  }
+  if(fstat(fd, st) != 0){
+    // printf("stat_slink2\n");
     return -1;
+  }
   return 0;
 }
 
@@ -149,6 +153,7 @@ concur(void)
   close(fd);
 
   for(int j = 0; j < nchild; j++) {
+    printf("j=%d\n",j);
     pid = fork();
     if(pid < 0){
       printf("FAILED: fork failed\n");
@@ -158,6 +163,7 @@ concur(void)
       int m = 0;
       unsigned int x = (pid ? 1 : 97);
       for(i = 0; i < 100; i++){
+        printf("i=%d\n",i);
         x = x * 1103515245 + 12345;
         if((x % 3) == 0) {
           symlink("/testsymlink/z", "/testsymlink/y");
