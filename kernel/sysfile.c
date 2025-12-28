@@ -500,6 +500,7 @@ uint64 sys_symlink(void){
       break;
   }
   writei(ip,0,(uint64)target,0,i);
+  iunlockput(ip);
 
   return 0;
 }
