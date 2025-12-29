@@ -327,7 +327,14 @@ sys_open(void)
 
   int loop=10;
   while(ip->type==T_SYMLINK&& !(omode&O_NOFOLLOW)&&loop--){
-    readi(ip,0,(uint64)path,0,MAXPATH);
+    // printf("while%d开始\n",loop);
+    int n = readi(ip,0,(uint64)path,0,MAXPATH);
+    if(n<0){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    path[n]=0;
     iunlockput(ip);
     // bug修复：为避免死锁，此时不持有任何锁
     ip=namei(path);
@@ -338,6 +345,7 @@ sys_open(void)
       end_op();
       return -1;
     }
+    // printf("while%d结束\n",loop);
   }
 
   // 如果类型为T_SYMLINK并且没有打开NOFOLLOW
@@ -522,11 +530,11 @@ uint64 sys_symlink(void){
   // printf("path=%s\n",path);
   struct inode* ip=create(path,T_SYMLINK,0,0);
   if(ip==0) {
+    end_op();
     return -1;
   }
-  int i=0;
-  while(i<MAXPATH&&target[i++]!='\0');
-  writei(ip,0,(uint64)target,0,i);
+  int n=strlen(target)+1;
+  writei(ip,0,(uint64)target,0,n);
   iunlockput(ip);
   end_op();
 
