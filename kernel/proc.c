@@ -134,6 +134,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // 初始所有VMA设为空闲
+  for(int i=0;i<16;i++)
+    p->vmas[i].free=1;
+
   return p;
 }
 

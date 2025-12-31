@@ -88,6 +88,7 @@ struct VMA{
   int prot;
   int flags;
   int fd;
+  int free;
 };
 
 // Per-process state
