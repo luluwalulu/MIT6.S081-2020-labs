@@ -484,3 +484,11 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64 sys_mmap(){
+  return 0;
+}
+
+uint64 sys_munmap(){
+  return 0;
+}
