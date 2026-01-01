@@ -21,3 +21,6 @@ xv6.out*
 submissions/
 ph
 barrier
+.vscode-server
+.cache
+.local
