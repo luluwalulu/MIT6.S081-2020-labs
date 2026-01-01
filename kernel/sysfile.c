@@ -494,11 +494,11 @@ uint64 sys_mmap(){
     return -1;
 
   // 如果想要建立可读映射，但是文件不可读
-  if((prot&PROT_READ) && !file->readable){
+  if((prot&PROT_READ) && !file->readable && !(flags&MAP_PRIVATE)){
     return -1;
   }
   // 如果想要建立可写映射，但是文件不可写
-  if((prot&PROT_WRITE) && !file->writable){
+  if((prot&PROT_WRITE) && !file->writable && !(flags&MAP_PRIVATE)){
     return -1;
   }
 
