@@ -495,8 +495,8 @@ uint64 sys_mmap(){
 
   struct proc* proc=myproc();
   for(int i=0;i<16;i++){
-    struct VMA vma=proc->vmas[i];
-    if(vma.free!=0){
+    struct VMA *vmas=proc->vmas;
+    if(vmas[i].free!=0){
       int j=i+1;
       uint64 va,va_end,next_va=0;
       for(;j<16;j++){
@@ -510,17 +510,17 @@ uint64 sys_mmap(){
       va_end=PGROUNDUP(va+length);
       // 必须满足下面的条件
       if(next_va==0||va_end<=next_va){
-        vma.va=va;
-        vma.va_end=va_end;
-        vma.length=length;
-        vma.prot=prot;
-        vma.flags=flags;
-        vma.fd=fd;
-        vma.file=file;
+        vmas[i].va=va;
+        vmas[i].va_end=va_end;
+        vmas[i].length=length;
+        vmas[i].prot=prot;
+        vmas[i].flags=flags;
+        vmas[i].fd=fd;
+        vmas[i].file=file;
         filedup(file);
-        printf("sys_mmap,i=%d\n",i);  
+        // printf("sys_mmap,i=%d\n",i);  
         // printf("ip->ref=%d\n",file->ip->ref);
-        vma.free=0;
+        vmas[i].free=0;
         return va;
       }
       else{
