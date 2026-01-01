@@ -517,7 +517,7 @@ uint64 sys_mmap(){
         proc->vmas[i].fd=fd;
         proc->vmas[i].file=file;
         proc->vmas[i].free=0;
-        return 0;
+        return va;
       }
       else{
         continue;
