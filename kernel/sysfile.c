@@ -516,6 +516,7 @@ uint64 sys_mmap(){
         proc->vmas[i].flags=flags;
         proc->vmas[i].fd=fd;
         proc->vmas[i].file=file;
+        filedup(file);
         proc->vmas[i].free=0;
         return va;
       }

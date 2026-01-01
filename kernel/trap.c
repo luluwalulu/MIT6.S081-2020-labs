@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,6 +71,36 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause()==13 || r_scause()==15){
+    struct VMA* vmas=p->vmas,vma;
+    for(int i=0;i<16;i++){
+      vma=vmas[i];
+      if(!vma.free && vma.va<=r_stval() && vma.va_end-1>=r_stval()){
+        uint64 pa;
+        if((pa=(uint64)kalloc())==0){
+          panic("usertrap:vma kalloc fail!\n");
+        }
+        else{
+          // 将r_stval()对齐
+          uint64 va=PGROUNDDOWN(r_stval());
+          struct inode* ip=vma.file->ip;
+          ilock(ip);
+          readi(ip,0,pa,va-vma.va,PGSIZE);
+          iunlockput(ip);
+          // readi成不成功不用管，只管把vma对应的页面映射就行了
+          uint64 perm = PTE_U; // 必须有用户访问位
+          if (vma.prot & PROT_READ)
+              perm |= PTE_R;
+          if (vma.prot & PROT_WRITE)
+              perm |= PTE_W;
+          if (vma.prot & PROT_EXEC)
+              perm |= PTE_X;
+          if(mappages(p->pagetable,va,PGSIZE,pa,perm)==-1){
+            panic("usertrap:vma mappage fail!\n");
+          }
+        }
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
