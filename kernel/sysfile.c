@@ -493,6 +493,15 @@ uint64 sys_mmap(){
   ||argint(2,&prot)<0||argint(3,&flags)<0||argfd(4,&fd,&file)<0)
     return -1;
 
+  // 如果想要建立可读映射，但是文件不可读
+  if((prot&PROT_READ) && !file->readable){
+    return -1;
+  }
+  // 如果想要建立可写映射，但是文件不可写
+  if((prot&PROT_WRITE) && !file->writable){
+    return -1;
+  }
+
   struct proc* proc=myproc();
   for(int i=0;i<16;i++){
     struct VMA *vmas=proc->vmas;
@@ -518,10 +527,7 @@ uint64 sys_mmap(){
         vmas[i].fd=fd;
         vmas[i].file=file;
         filedup(file);
-        // printf("sys_mmap,i=%d\n",i);  
-        // printf("ip->ref=%d\n",file->ip->ref);
         vmas[i].free=0;
-        // printf("sys_mmap,i=%d\n",i);
         return va;
       }
       else{
@@ -531,38 +537,7 @@ uint64 sys_mmap(){
   }
   return -1;
 }
-    // struct VMA vma=proc->vmas[i];
-    // if(vma.free!=0){
-    //   int j=i+1;
-    //   uint64 va,va_end,next_va=0;
-    //   for(;j<16;j++){
-    //     if(!proc->vmas[j].free){
-    //       next_va=proc->vmas[j].va;
-    //     }
-    //   }
 
-    //   if(i==0) va=0x40000000;
-    //   else va=proc->vmas[i-1].va_end;
-    //   va_end=PGROUNDUP(va+length);
-    //   // 必须满足下面的条件
-    //   if(next_va==0||va_end<=next_va){
-    //     vma.va=va;
-    //     vma.va_end=va_end;
-    //     vma.length=length;
-    //     vma.prot=prot;
-    //     vma.flags=flags;
-    //     vma.fd=fd;
-    //     vma.file=file;
-    //     filedup(file);
-    //     printf("sys_mmap,i=%d\n",i);  
-    //     // printf("ip->ref=%d\n",file->ip->ref);
-    //     vma.free=0;
-    //     return va;
-    //   }
-    //   else{
-    //     continue;
-    //   }
-    // }
 
 uint64 sys_munmap(){
   return 0;
