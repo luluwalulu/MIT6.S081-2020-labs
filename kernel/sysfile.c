@@ -486,7 +486,46 @@ sys_pipe(void)
 }
 
 uint64 sys_mmap(){
-  return 0;
+  uint64 addr,length,offset;
+  int prot,flags,fd;
+  struct file * file;
+  if(argaddr(0,&addr)<0||argaddr(1,&length)<0||argaddr(5,&offset)<0
+  ||argint(2,&prot)<0||argint(3,&flags)<0||argfd(4,&fd,&file)<0)
+    return -1;
+
+  struct proc* proc=myproc();
+  for(int i=0;i<16;i++){
+    if(proc->vmas[i].free){
+      int j=i+1;
+      uint64 va,va_end,next_va=0;
+      for(;j<16;j++){
+        if(!proc->vmas[j].free){
+          next_va=proc->vmas[j].va;
+        }
+      }
+
+      if(i==0) va=0x40000000;
+      else va=proc->vmas[i-1].va_end;
+      va_end=PGROUNDUP(va+length);
+      // 必须满足下面的条件
+      if(next_va==0||va_end<=next_va){
+        proc->vmas[i].va=va;
+        proc->vmas[i].va_end=va_end;
+        proc->vmas[i].length=length;
+        proc->vmas[i].prot=prot;
+        proc->vmas[i].flags=flags;
+        proc->vmas[i].fd=fd;
+        proc->vmas[i].file=file;
+        proc->vmas[i].free=0;
+        return 0;
+      }
+      else{
+        continue;
+      }
+    }
+  }
+
+  return -1;
 }
 
 uint64 sys_munmap(){

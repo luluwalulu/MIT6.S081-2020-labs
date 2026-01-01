@@ -83,11 +83,16 @@ struct trapframe {
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct VMA{
-  void * va;
-  uint64 length;
+  uint64 va; // 表示文件在虚拟内存中的起始地址，基地址为0x40000000
+  uint64 length; // length是要映射的字节数，可能和文件大小不同
+  // va_end的值为PGROUNDUP(va+length)，是下一个vma的起始地址
+  uint64 va_end;
+
   int prot;
   int flags;
   int fd;
+  struct file* file;
+
   int free;
 };
 
