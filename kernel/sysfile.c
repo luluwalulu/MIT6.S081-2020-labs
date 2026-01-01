@@ -528,6 +528,8 @@ uint64 sys_mmap(){
         vmas[i].file=file;
         filedup(file);
         vmas[i].free=0;
+        vmas[i].file_end=va+file->ip->size-1;
+        vmas[i].n=0;
         return va;
       }
       else{
@@ -538,7 +540,60 @@ uint64 sys_mmap(){
   return -1;
 }
 
-
+// unmap删除一部分映射关系后，对剩余部分的映射关系没有任何影响。
+// 但是对于删除的部分而言，不但映射关系没了，而且之后访问这块内存应该报错
+// 必须修改va和va_end以防止unmap之后，又因为page fault在usertrap中重新建立映射关系
 uint64 sys_munmap(){
+  uint64 addr;
+  int length;
+  if(argaddr(0,&addr)<0 || argint(1,&length)<0) return -1;
+
+  struct proc* proc=myproc();
+  struct VMA* vmas=proc->vmas;
+
+  // 查找addr属于哪个vma
+  int i;
+  for(i=0;i<16;i++){
+    if(addr>=vmas[i].va&&addr<vmas[i].va_end) break;
+  }
+
+  // 修改vmas[i]，需要修改的变量有va,va_end,length,n
+  // 只要是addr和addr_end覆盖到的页面，通通删除
+  uint64 addr_end=PGROUNDDOWN(addr+length-1);
+  addr=PGROUNDDOWN(addr);
+  if(addr<vmas[i].va) addr=vmas[i].va;
+  if(addr_end>=vmas[i].va_end) addr_end=vmas[i].va_end-PGSIZE; 
+  // 总共删n页
+  int n=(addr_end-addr)/PGSIZE+1;
+  vmas[i].length-=n*PGSIZE;
+  // 要么删开头
+  if(addr==vmas[i].va){
+    vmas[i].va+=n*PGSIZE;
+    vmas[i].n+=n;
+  }
+  // 要么删结尾
+  else if(addr==vmas[i].va_end-PGSIZE){
+    vmas[i].va_end-=n*PGSIZE;
+  }
+
+  // 如果是MAP_SHARED，那么将被删的页面的对应修改写回文件中，释放vma，减少file引用计数
+  if(vmas[i].flags&MAP_SHARED){
+    begin_op();
+    ilock(vmas[i].file->ip);
+    uint64 oriva=vmas[i].va-n*PGSIZE;
+    uint64 count,file_end=vmas[i].file_end;
+    if(addr_end<=file_end&&file_end<addr_end+PGSIZE) count=file_end-addr+1;
+    else count=n*PGSIZE;
+    writei(vmas[i].file->ip,1,addr,addr-oriva,count);
+    iunlock(vmas[i].file->ip);
+    end_op();
+  }
+  // 取消映射
+  uvmunmap(proc->pagetable,addr,n,1);
+  if(length<=0){
+    fileclose(vmas[i].file);
+    vmas[i].free=1;
+  }
+
   return 0;
 }

@@ -85,11 +85,11 @@ usertrap(void)
           uint64 va=PGROUNDDOWN(r_stval());
           struct inode* ip=vma.file->ip;
           ilock(ip);
-          readi(ip,0,pa,va-vma.va,PGSIZE);
+          readi(ip,0,pa,va-vma.va+vma.n*PGSIZE,PGSIZE);
 
           // 如果有超出文件大小的部分，还需要置零
           // 先求文件在虚拟地址空间中的结束地址
-          uint64 file_end=vma.va+vma.file->ip->size-1;
+          uint64 file_end=vma.file_end;
           // 如果结束地址在va的物理页中
           if(file_end>=va&&file_end<va+PGSIZE){
             memset((void*)(pa+file_end+1-va),0,va+PGSIZE-file_end-1);

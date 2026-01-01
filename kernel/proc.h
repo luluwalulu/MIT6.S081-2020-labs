@@ -87,6 +87,10 @@ struct VMA{
   uint64 length; // length是要映射的字节数，可能和文件大小不同
   // va_end的值为PGROUNDUP(va+length)，是下一个vma的起始地址
   uint64 va_end;
+  // 文件在虚拟地址空间中的结束地址，file_end=vma.va+vma.file->ip->size-1
+  uint64 file_end; 
+  // 开头被删除的页面数量
+  int n;
 
   int prot;
   int flags;
