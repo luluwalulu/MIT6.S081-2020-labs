@@ -521,6 +521,7 @@ uint64 sys_mmap(){
         // printf("sys_mmap,i=%d\n",i);  
         // printf("ip->ref=%d\n",file->ip->ref);
         vmas[i].free=0;
+        // printf("sys_mmap,i=%d\n",i);
         return va;
       }
       else{

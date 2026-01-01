@@ -75,7 +75,10 @@ usertrap(void)
     struct VMA* vmas=p->vmas,vma;
     for(int i=0;i<16;i++){
       vma=vmas[i];
+      // if(vma.free) printf("1\n");
+      // if(vma.va>r_stval()||vma.va_end-1<r_stval()) printf("2\n");
       if(!vma.free && vma.va<=r_stval() && vma.va_end-1>=r_stval()){
+        // printf("trap,%d\n",r_stval());
         uint64 pa;
         if((pa=(uint64)kalloc())==0){
           panic("usertrap:vma kalloc fail!\n");
@@ -84,9 +87,10 @@ usertrap(void)
           // 将r_stval()对齐
           uint64 va=PGROUNDDOWN(r_stval());
           struct inode* ip=vma.file->ip;
+          // printf("trap,ip->ref=%d\n",ip->ref);
           ilock(ip);
           readi(ip,0,pa,va-vma.va,PGSIZE);
-          iunlockput(ip);
+          iunlock(ip);
           // readi成不成功不用管，只管把vma对应的页面映射就行了
           uint64 perm = PTE_U; // 必须有用户访问位
           if (vma.prot & PROT_READ)
