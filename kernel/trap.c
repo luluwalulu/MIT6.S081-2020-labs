@@ -75,10 +75,7 @@ usertrap(void)
     struct VMA* vmas=p->vmas,vma;
     for(int i=0;i<16;i++){
       vma=vmas[i];
-      // if(vma.free) printf("1\n");
-      // if(vma.va>r_stval()||vma.va_end-1<r_stval()) printf("2\n");
       if(!vma.free && vma.va<=r_stval() && vma.va_end-1>=r_stval()){
-        // printf("trap,%d\n",r_stval());
         uint64 pa;
         if((pa=(uint64)kalloc())==0){
           panic("usertrap:vma kalloc fail!\n");
@@ -87,9 +84,21 @@ usertrap(void)
           // 将r_stval()对齐
           uint64 va=PGROUNDDOWN(r_stval());
           struct inode* ip=vma.file->ip;
-          // printf("trap,ip->ref=%d\n",ip->ref);
           ilock(ip);
           readi(ip,0,pa,va-vma.va,PGSIZE);
+
+          // 如果有超出文件大小的部分，还需要置零
+          // 先求文件在虚拟地址空间中的结束地址
+          uint64 file_end=vma.va+vma.file->ip->size-1;
+          // 如果结束地址在va的物理页中
+          if(file_end>=va&&file_end<va+PGSIZE){
+            memset((void*)(pa+file_end+1-va),0,va+PGSIZE-file_end-1);
+          }
+          // 如果va>结束地址，那么该页全部置零
+          else if(va>file_end){
+            memset((void*)pa,0,PGSIZE);
+          }
+
           iunlock(ip);
           // readi成不成功不用管，只管把vma对应的页面映射就行了
           uint64 perm = PTE_U; // 必须有用户访问位

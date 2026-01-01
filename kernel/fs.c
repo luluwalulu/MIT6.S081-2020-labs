@@ -293,7 +293,7 @@ ilock(struct inode *ip)
 
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
-
+    
   acquiresleep(&ip->lock);
 
   if(ip->valid == 0){
