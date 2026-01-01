@@ -588,8 +588,12 @@ uint64 sys_munmap(){
     iunlock(vmas[i].file->ip);
     end_op();
   }
-  // 取消映射
-  uvmunmap(proc->pagetable,addr,n,1);
+  // 取消映射，VMA中尚未访问的页面由于还未建立映射，如果对它们调用uvmunmap则会报错
+  for(;addr<=addr_end;addr+=PGSIZE){
+    if(walkaddr(proc->pagetable,addr)!=0){
+      uvmunmap(proc->pagetable,addr,1,1);
+    }
+  }
   if(length<=0){
     fileclose(vmas[i].file);
     vmas[i].free=1;
