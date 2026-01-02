@@ -292,6 +292,7 @@ fork(void)
 
   np->parent = p;
 
+  // 将p的vmas拷贝到np的vmas中
   for(int i=0;i<16;i++){
     if(p->vmas[i].free==0){
       np->vmas[i]=p->vmas[i];
@@ -299,6 +300,28 @@ fork(void)
     }
     else{
       np->vmas[i].free=1;
+    }
+  }
+
+  // 将p的用户虚拟内存 “映射” 拷贝到np中
+  for(int i=0;i<16;i++){
+    if(!p->vmas[i].free){
+      uint64 va=p->vmas[i].va,va_end=p->vmas[i].va_end,src;
+      int perm=PTE_U;
+      if (p->vmas[i].prot & PROT_READ)
+        perm |= PTE_R;
+      if (p->vmas[i].prot & PROT_WRITE)
+        perm |= PTE_W;
+      if (p->vmas[i].prot & PROT_EXEC)
+        perm |= PTE_X;
+      for(uint64 addr=va;addr<va_end;addr+=PGSIZE){
+        // 那么需要在np中建立同样的映射关系
+        if((src=walkaddr(p->pagetable,addr))!=0){
+          uint64 dst=(uint64)kalloc();
+          memmove((void*)dst,(void*)src,PGSIZE);
+          mappages(np->pagetable,addr,PGSIZE,dst,perm);
+        }
+      }
     }
   }
 
