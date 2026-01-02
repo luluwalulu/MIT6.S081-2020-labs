@@ -292,6 +292,13 @@ fork(void)
 
   np->parent = p;
 
+  for(int i=0;i<16;i++){
+    if(!np->vmas[i].free){
+      p->vmas[i]=np->vmas[i];
+      filedup(np->vmas[i].file);
+    }
+  }
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 

@@ -587,7 +587,6 @@ uint64 sys_munmap(){
         begin_op();
         ilock(vmas[i].file->ip);
         writei(vmas[i].file->ip,1,addr,addr-oriva,count);
-        printf("size=%d\n",size);
         iunlock(vmas[i].file->ip);
         end_op();
       }

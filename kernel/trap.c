@@ -72,6 +72,7 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else if(r_scause()==13 || r_scause()==15){
+    printf("usertrap\n");
     struct VMA* vmas=p->vmas,vma;
     for(int i=0;i<16;i++){
       vma=vmas[i];
