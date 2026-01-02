@@ -68,7 +68,7 @@ usertrap(void)
     // so don't enable until done with those registers.
     intr_on();
 
-    syscall();
+    syscall();    
   } else if((which_dev = devintr()) != 0){
     // ok
   } else if(r_scause()==13 || r_scause()==15){
