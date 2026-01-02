@@ -529,7 +529,7 @@ uint64 sys_mmap(){
         filedup(file);
         vmas[i].free=0;
         vmas[i].file_end=va+file->ip->size-1;
-        vmas[i].n=0;
+        vmas[i].oriva=va;
         return va;
       }
       else{
@@ -569,31 +569,32 @@ uint64 sys_munmap(){
   // 要么删开头
   if(addr==vmas[i].va){
     vmas[i].va+=n*PGSIZE;
-    vmas[i].n+=n;
   }
   // 要么删结尾
   else if(addr==vmas[i].va_end-PGSIZE){
-    vmas[i].va_end-=n*PGSIZE;
+    if(n==1) panic("sys_munmap\n");
+    vmas[i].va_end-=PGSIZE;
   }
 
-  // 如果是MAP_SHARED，那么将被删的页面的对应修改写回文件中，释放vma，减少file引用计数
-  if(vmas[i].flags&MAP_SHARED){
-    begin_op();
-    ilock(vmas[i].file->ip);
-    uint64 oriva=vmas[i].va-n*PGSIZE;
-    uint64 count,file_end=vmas[i].file_end;
-    if(addr_end<=file_end&&file_end<addr_end+PGSIZE) count=file_end-addr+1;
-    else count=n*PGSIZE;
-    writei(vmas[i].file->ip,1,addr,addr-oriva,count);
-    iunlock(vmas[i].file->ip);
-    end_op();
-  }
+  uint64 file_end=vmas[i].file_end,oriva=vmas[i].oriva;  
   // 取消映射，VMA中尚未访问的页面由于还未建立映射，如果对它们调用uvmunmap则会报错
   for(;addr<=addr_end;addr+=PGSIZE){
     if(walkaddr(proc->pagetable,addr)!=0){
+      if(vmas[i].flags&MAP_SHARED){
+        int count;
+        if(addr<=file_end&&file_end<addr+PGSIZE) count=file_end-addr+1;
+        else count=PGSIZE;
+        begin_op();
+        ilock(vmas[i].file->ip);
+        writei(vmas[i].file->ip,1,addr,addr-oriva,count);
+        printf("size=%d\n",size);
+        iunlock(vmas[i].file->ip);
+        end_op();
+      }
       uvmunmap(proc->pagetable,addr,1,1);
     }
   }
+
   if(length<=0){
     fileclose(vmas[i].file);
     vmas[i].free=1;

@@ -89,8 +89,8 @@ struct VMA{
   uint64 va_end;
   // 文件在虚拟地址空间中的结束地址，file_end=vma.va+vma.file->ip->size-1
   uint64 file_end; 
-  // 开头被删除的页面数量
-  int n;
+  // 原本的起始地址va
+  uint64 oriva;
 
   int prot;
   int flags;

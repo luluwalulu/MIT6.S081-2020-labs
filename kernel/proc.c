@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"
+#include "file.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -355,6 +359,32 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+  }
+
+  // 取消所有vma中的映射
+  struct VMA* vmas=p->vmas;
+  for(int i=0;i<16;i++){
+    if(!vmas[i].free){
+      uint64 va=vmas[i].va,va_end=vmas[i].va_end,file_end=vmas[i].file_end,oriva=vmas[i].oriva;
+      begin_op();
+      ilock(vmas[i].file->ip);
+      // 将修改写回文件中，并取消映射关系
+      for(uint64 addr=va;addr<va_end;addr+=PGSIZE){
+        if(walkaddr(proc->pagetable,addr)!=0){
+          if(vmas[i].flags&MAP_SHARED){
+            int count;
+            if(addr<=file_end&&file_end<addr+PGSIZE) count=file_end-addr+1;
+            else count=PGSIZE;
+            writei(vmas[i].file->ip,1,addr,addr-oriva,count);
+          }
+          uvmunmap(proc->pagetable,addr,1,1);
+        }
+      } // for终止
+      iunlock(vmas[i].file->ip);
+      end_op();
+      fileclose(vmas[i].file);
+      vmas[i].free=1;
+    }// if终止
   }
 
   begin_op();
