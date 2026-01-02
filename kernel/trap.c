@@ -105,7 +105,7 @@ usertrap(void)
 
           iunlock(ip);
           // readi成不成功不用管，只管把vma对应的页面映射就行了
-          uint64 perm = PTE_U; // 必须有用户访问位
+          int perm = PTE_U; // 必须有用户访问位
           if (vma.prot & PROT_READ)
               perm |= PTE_R;
           if (vma.prot & PROT_WRITE)

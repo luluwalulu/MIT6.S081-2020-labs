@@ -403,14 +403,14 @@ exit(int status)
       ilock(vmas[i].file->ip);
       // 将修改写回文件中，并取消映射关系
       for(uint64 addr=va;addr<va_end;addr+=PGSIZE){
-        if(walkaddr(proc->pagetable,addr)!=0){
+        if(walkaddr(p->pagetable,addr)!=0){
           if(vmas[i].flags&MAP_SHARED){
             int count;
             if(addr<=file_end&&file_end<addr+PGSIZE) count=file_end-addr+1;
             else count=PGSIZE;
             writei(vmas[i].file->ip,1,addr,addr-oriva,count);
           }
-          uvmunmap(proc->pagetable,addr,1,1);
+          uvmunmap(p->pagetable,addr,1,1);
         }
       } // for终止
       iunlock(vmas[i].file->ip);
