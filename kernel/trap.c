@@ -72,14 +72,13 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else if(r_scause()==13 || r_scause()==15){
-    // printf("usertrap1\n");
     struct VMA* vmas=p->vmas,vma;
+    // 由于这个条件语句拦截了所有page fault，所以需要额外处理，不是正确的地址应该杀掉
+    int should_kill=1;
     for(int i=0;i<16;i++){
       vma=vmas[i];
-      // if(vma.free) printf("1\n");
-      // if(vma.va>r_stval() || vma.va_end-1<r_stval()) printf("2\n");
       if(!vma.free && vma.va<=r_stval() && vma.va_end-1>=r_stval()){
-        // printf("usertrap2\n");
+        should_kill=0;
         uint64 pa;
         if((pa=(uint64)kalloc())==0){
           panic("usertrap:vma kalloc fail!\n");
@@ -118,6 +117,7 @@ usertrap(void)
         }
       }
     }
+    if(should_kill) p->killed=1;
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
