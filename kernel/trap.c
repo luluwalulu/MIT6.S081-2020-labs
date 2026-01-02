@@ -72,11 +72,14 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else if(r_scause()==13 || r_scause()==15){
-    printf("usertrap\n");
+    // printf("usertrap1\n");
     struct VMA* vmas=p->vmas,vma;
     for(int i=0;i<16;i++){
       vma=vmas[i];
+      // if(vma.free) printf("1\n");
+      // if(vma.va>r_stval() || vma.va_end-1<r_stval()) printf("2\n");
       if(!vma.free && vma.va<=r_stval() && vma.va_end-1>=r_stval()){
+        // printf("usertrap2\n");
         uint64 pa;
         if((pa=(uint64)kalloc())==0){
           panic("usertrap:vma kalloc fail!\n");
