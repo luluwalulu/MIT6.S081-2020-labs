@@ -13,14 +13,22 @@
 #define E1000_RDBAL    (0x02800/4)  /* RX Descriptor Base Address Low - RW */
 #define E1000_RDTR     (0x02820/4)  /* RX Delay Timer */
 #define E1000_RADV     (0x0282C/4)  /* RX Interrupt Absolute Delay Timer */
+
+// 硬件接收到数据包就推进RDH
+// 软件拿走数据包就推进RDT
 #define E1000_RDH      (0x02810/4)  /* RX Descriptor Head - RW */
 #define E1000_RDT      (0x02818/4)  /* RX Descriptor Tail - RW */
+
 #define E1000_RDLEN    (0x02808/4)  /* RX Descriptor Length - RW */
 #define E1000_RSRPD    (0x02C00/4)  /* RX Small Packet Detect Interrupt */
 #define E1000_TDBAL    (0x03800/4)  /* TX Descriptor Base Address Low - RW */
 #define E1000_TDLEN    (0x03808/4)  /* TX Descriptor Length - RW */
+
+// [TDH,TDT)是硬件拥有的描述符，即可能正在发送数据中
+// [TDH,TDT)范围之外是软件拥有的描述符，这些是已经发送完毕或尚未使用的空位
 #define E1000_TDH      (0x03810/4)  /* TX Descriptor Head - RW */
 #define E1000_TDT      (0x03818/4)  /* TX Descripotr Tail - RW */
+
 #define E1000_MTA      (0x05200/4)  /* Multicast Table Array - RW Array */
 #define E1000_RA       (0x05400/4)  /* Receive Address - RW Array */
 
@@ -90,18 +98,23 @@
 #define DATA_MAX 1518
 
 /* Transmit Descriptor command definitions [E1000 3.3.3.1] */
+// 表示这个描述符就是包的结尾
 #define E1000_TXD_CMD_EOP    0x01 /* End of Packet */
+
+// 设置此位后，硬件才会在发送完毕后更新status字段中的DD位
 #define E1000_TXD_CMD_RS     0x08 /* Report Status */
 
 /* Transmit Descriptor status definitions [E1000 3.3.3.2] */
+// 表示发送描述符完成，数据已经发送，描述符可以回收了
+// 初始时tx_ring中所有描述符状态的DD位都被置位
 #define E1000_TXD_STAT_DD    0x00000001 /* Descriptor Done */
 
 // [E1000 3.3.3]
 struct tx_desc
 {
-  uint64 addr;
-  uint16 length;
-  uint8 cso;
+  uint64 addr;        
+  uint16 length;      
+  uint8 cso;          
   uint8 cmd;
   uint8 status;
   uint8 css;
@@ -109,7 +122,10 @@ struct tx_desc
 };
 
 /* Receive Descriptor bit definitions [E1000 3.2.3.1] */
+// 描述符完成，表示数据包已经被填入，该描述符对应的数据包可以被读取了
 #define E1000_RXD_STAT_DD       0x01    /* Descriptor Done */
+
+// 表示这个描述符包含了一个数据包的最后一部分
 #define E1000_RXD_STAT_EOP      0x02    /* End of Packet */
 
 // [E1000 3.2.3]

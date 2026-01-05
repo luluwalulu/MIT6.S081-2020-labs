@@ -5,9 +5,13 @@
 #define MBUF_SIZE              2048
 #define MBUF_DEFAULT_HEADROOM  128
 
+// 这里一定注意看一下mbufalloc，head才是真正放置数据的地方
 struct mbuf {
+  // 处理大数据包
   struct mbuf  *next; // the next mbuf in the chain
+  // 指向内存中数据包的位置
   char         *head; // the current start position of the buffer
+  // 数据包长度
   unsigned int len;   // the length of the buffer
   char         buf[MBUF_SIZE]; // the backing store
 };
