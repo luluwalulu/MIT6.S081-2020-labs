@@ -103,6 +103,7 @@ e1000_transmit(struct mbuf *m)
   // a pointer so that it can be freed after sending.
   //
   acquire(&e1000_lock);
+  // printf("transmit获取成功\n");
 
   int tx_num=regs[E1000_TDT];
   struct tx_desc* tx_ptr=&tx_ring[tx_num];
@@ -110,6 +111,7 @@ e1000_transmit(struct mbuf *m)
   // 如果TXT处没有设置DD位，说明溢出
   if((tx_ptr->status&E1000_TXD_STAT_DD)==0){
     release(&e1000_lock);
+    // printf("transmit释放成功1\n");
     return -1;
   }
 
@@ -128,6 +130,7 @@ e1000_transmit(struct mbuf *m)
   regs[E1000_TDT]=(tx_num+1)%TX_RING_SIZE;
 
   release(&e1000_lock);
+  // printf("transmit释放成功2\n");
   
   return 0;
 }
@@ -154,6 +157,8 @@ e1000_recv(void)
 
   struct mbuf * oldm=rx_mbufs[rx_num];
   oldm->len=rx_ptr->length;
+  regs[E1000_RDT]=(regs[E1000_RDT]+1)%RX_RING_SIZE;
+  release(&e1000_lock);
   net_rx(oldm);
 
   struct mbuf* newm=mbufalloc(0);
@@ -161,10 +166,6 @@ e1000_recv(void)
   rx_ptr->addr=(uint64)newm->head;
   rx_ptr->length=0;
   rx_ptr->status=0;
-
-  regs[E1000_RDT]=(regs[E1000_RDT]+1)%RX_RING_SIZE;
-
-  release(&e1000_lock);
 }
 
 void
