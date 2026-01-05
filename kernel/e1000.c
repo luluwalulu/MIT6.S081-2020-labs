@@ -157,6 +157,7 @@ e1000_recv(void)
   net_rx(oldm);
 
   struct mbuf* newm=mbufalloc(0);
+  rx_mbufs[rx_num]=newm;
   rx_ptr->addr=(uint64)newm->head;
   rx_ptr->length=0;
   rx_ptr->status=0;
