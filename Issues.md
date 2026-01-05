@@ -1,5 +1,7 @@
 当前Issue：
 3.测试multi-progress时卡住
+线索：fork后的子进程中没有一个从ping()函数返回然后exit，全都卡死在里面，导致wait在空等
+线索：将recv的代码修改为批量处理后，在测试multi-progress时，之前10个进程sleep之后都无法醒来，现在10个能醒9个，非常奇怪。修改批量处理的逻辑和这个有关系吗？
 
 
 已解决Issue：

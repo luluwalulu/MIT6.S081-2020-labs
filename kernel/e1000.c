@@ -130,8 +130,7 @@ e1000_transmit(struct mbuf *m)
   regs[E1000_TDT]=(tx_num+1)%TX_RING_SIZE;
 
   release(&e1000_lock);
-  // printf("transmit释放成功2\n");
-  
+  // printf("transmit\n");  
   return 0;
 }
 
@@ -144,28 +143,32 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
-  acquire(&e1000_lock);
+  
+  while(1){
+    acquire(&e1000_lock);
+    int rx_num=regs[E1000_RDT];
+    rx_num=(rx_num+1)%RX_RING_SIZE;
+    struct rx_desc* rx_ptr=&rx_ring[rx_num];
 
-  int rx_num=regs[E1000_RDT];
-  rx_num=(rx_num+1)%RX_RING_SIZE;
-  struct rx_desc* rx_ptr=&rx_ring[rx_num];
+    if(!(rx_ptr->status & E1000_RXD_STAT_DD)){
+      release(&e1000_lock);
+      return;
+    }
 
-  if(!(rx_ptr->status & E1000_RXD_STAT_DD)){
+    struct mbuf * oldm=rx_mbufs[rx_num];
+    oldm->len=rx_ptr->length;
+    regs[E1000_RDT]=(regs[E1000_RDT]+1)%RX_RING_SIZE;
+    
+    struct mbuf* newm=mbufalloc(0);
+    rx_mbufs[rx_num]=newm;
+    rx_ptr->addr=(uint64)newm->head;
+    rx_ptr->length=0;
+    rx_ptr->status=0;
+
     release(&e1000_lock);
-    return;
-  }
 
-  struct mbuf * oldm=rx_mbufs[rx_num];
-  oldm->len=rx_ptr->length;
-  regs[E1000_RDT]=(regs[E1000_RDT]+1)%RX_RING_SIZE;
-  release(&e1000_lock);
-  net_rx(oldm);
-
-  struct mbuf* newm=mbufalloc(0);
-  rx_mbufs[rx_num]=newm;
-  rx_ptr->addr=(uint64)newm->head;
-  rx_ptr->length=0;
-  rx_ptr->status=0;
+    net_rx(oldm);
+  } 
 }
 
 void
