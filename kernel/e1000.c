@@ -108,7 +108,7 @@ e1000_transmit(struct mbuf *m)
   struct tx_desc* tx_ptr=&tx_ring[tx_num];
 
   // 如果TXT处没有设置DD位，说明溢出
-  if(tx_ptr->status&E1000_TXD_STAT_DD==0){
+  if((tx_ptr->status&E1000_TXD_STAT_DD)==0){
     return -1;
   }
 
@@ -117,7 +117,7 @@ e1000_transmit(struct mbuf *m)
     mbuffree(tx_mbufs[tx_num]);
 
   // 填描述符
-  tx_ptr->addr=m->head;
+  tx_ptr->addr=(uint64)m->head;
   tx_ptr->length=m->len;
   tx_ptr->cmd &= E1000_TXD_CMD_EOP;
   tx_ptr->cmd &= E1000_TXD_CMD_RS;
@@ -144,19 +144,19 @@ e1000_recv(void)
   acquire(&e1000_lock);
 
   int rx_num=regs[E1000_RDT];
-  int rx_num=(rx_num+1)%RX_RING_SIZE;
+  rx_num=(rx_num+1)%RX_RING_SIZE;
   struct rx_desc* rx_ptr=&rx_ring[rx_num];
 
   if(!(rx_ptr->status & E1000_RXD_STAT_DD)){
     return;
   }
 
-  struct mbuf * oldm=&rx_mbufs[rx_num];
+  struct mbuf * oldm=rx_mbufs[rx_num];
   oldm->len=rx_ptr->length;
   net_rx(oldm);
 
   struct mbuf* newm=mbufalloc(0);
-  rx_ptr->addr=newm->head;
+  rx_ptr->addr=(uint64)newm->head;
   rx_ptr->status=0;
 
   regs[E1000_RDT]=(regs[E1000_RDT]+1)%RX_RING_SIZE;
